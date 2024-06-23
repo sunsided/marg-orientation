@@ -25,6 +25,7 @@ impl<T> EulerAngles<T> {
 
     /// Returns the length of the [`EulerAngles`] vector.
     #[inline(always)]
+    #[allow(unused)]
     pub const fn len(&self) -> usize {
         3
     }

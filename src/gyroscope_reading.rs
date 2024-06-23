@@ -26,6 +26,7 @@ impl<T> GyroscopeReading<T> {
 
     /// Returns the length of the [`GyroscopeReading`] vector.
     #[inline(always)]
+    #[allow(unused)]
     pub const fn len(&self) -> usize {
         3
     }

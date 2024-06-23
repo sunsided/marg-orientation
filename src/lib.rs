@@ -36,9 +36,10 @@ const STATES: usize = 3; // roll rate, pitch rate, yaw rate
 const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate
 const OBSERVATIONS: usize = 3; // roll, pitch, yaw
 
-/// A MARG orientation estimator.
+/// A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator.
 pub struct OrientationEstimator {}
 
+/// An owned orientation estimator with generic type `T`.
 pub struct OwnedOrientationEstimator<T> {
     filter: OwnedKalmanFilter<T>,
     control: OwnedControlInput<T>,
@@ -70,9 +71,6 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + Default,
     {
-        // TODO: Pass as argument
-        // TODO: Add sensor covariances
-
         let filter = Self::build_filter();
         let control = Self::build_control();
         let measurement = Self::build_measurement();
@@ -90,6 +88,11 @@ impl<T> OwnedOrientationEstimator<T> {
 }
 
 impl<T> OwnedOrientationEstimator<T> {
+    /// Performs a prediction step to obtain new orientation estimates.
+    ///
+    /// ## Arguments
+    /// * `delta_t` - The time step for the prediction.
+    /// * `angular_rates` - The angular rates measured by the magnetometer.
     pub fn predict(&mut self, delta_t: T, angular_rates: &MagnetometerReading<T>)
     where
         T: MatrixDataType + Default,
@@ -105,6 +108,11 @@ impl<T> OwnedOrientationEstimator<T> {
         // TODO: Clamp any angles?
     }
 
+    /// Performs a correction step using accelerometer and magnetometer readings.
+    ///
+    /// ## Arguments
+    /// * `accelerometer` - The accelerometer reading.
+    /// * `magnetometer` - The magnetometer reading.
     pub fn correct(
         &mut self,
         accelerometer: &AccelerometerReading<T>,
@@ -223,49 +231,30 @@ impl<T> OwnedOrientationEstimator<T> {
         let r11 = r11_nom / (sq(denom) + epsilon);
         r.set_at(0, 0, r11);
 
-        // Row 1, column 2.
+        // Row 1, column 2 and row 2, column 1.
         let r12_nom = sa33
             * (-ax2 * mx * my + ax * ay * mx2 - ax * ay * my2 - two * ax * az * my * mz
                 + ay2 * mx * my
                 + two * ay * az * mx * mz);
         let r12 = r12_nom / (one_minus_az2_sqrt * denom + epsilon);
-        r.set_at(0, 1, r12);
+        r.set_symmetric(0, 1, r12);
 
-        // Row 1, column 3.
+        // Row 1, column 3 and row 3, column 1.
         let r13_nom = ax * sa22 * (ax * az * mx2 + ax * az * my2 + az2 * mx * mz - mx * mz)
             + ay * sa11 * (ay * az * mx2 + ay * az * my2 + az2 * my * mz - my * mz);
         let r13 = r13_nom / ((ax2 + ay2) * denom + epsilon);
-        r.set_at(0, 2, r13);
-
-        // Row 2, column 1.
-        let r21_nom = sa33
-            * (-ax2 * mx * my + ax * ay * mx2 - ax * ay * my2 - two * ax * az * my * mz
-                + ay2 * mx * my
-                + two * ay * az * mx * mz);
-        let r21 = r21_nom / (one_minus_az2_sqrt * denom + epsilon);
-        r.set_at(1, 0, r21);
+        r.set_symmetric(0, 2, r13);
 
         // Row 2, column 2.
         let r22 = -sa33 / (ax2 - T::one() + epsilon);
         r.set_at(1, 1, r22);
 
-        // Row 2, column 3.
-        r.set_at(1, 2, T::zero());
-
-        // Row 3, column 1.
-        let r31_nom = ax * sa22 * (ax * az * mx2 + ax * az * my2 + az2 * mx * mz - mx * mz)
-            + ay * sa11 * (ay * az * mx2 + ay * az * my2 + az2 * my * mz - my * mz);
-        let r31 = r31_nom / ((ax2 + ay2) * denom + epsilon);
-        r.set_at(2, 0, r31); // Take from r13
-
-        // Row 3, column 2.
-        r.set_at(2, 1, T::zero());
+        // Row 2, column 3 and row 3, column 2.
+        r.set_symmetric(1, 2, T::zero());
 
         // Row 3, column 3.
         let r33 = (ax2 * sa22 + ay2 * sa11) / sq(ax2 + ay2 + epsilon);
         r.set_at(2, 2, r33);
-
-        todo!("calculation missing");
     }
 
     /// Constructs the state transition matrix based on the angular rates.
@@ -783,9 +772,9 @@ mod tests {
         estimator.correct(&accelerometer, &magnetometer);
 
         estimator.filter.state_vector().inspect(|vec| {
-            assert_eq!(vec.get_row(0).round7(), 0.000083); // replace with approximate tests
-            assert_eq!(vec.get_row(1).round2(), 1.4399999); // replace with approximate tests
-            assert_eq!(vec.get_row(2).round2(), -1.4399999); // replace with approximate tests
+            assert_eq!(vec.get_row(0).round7(), 0.0); // replace with approximate tests
+            assert_eq!(vec.get_row(1).round2(), 1.23); // replace with approximate tests
+            assert_eq!(vec.get_row(2).round2(), -1.5699999); // replace with approximate tests
         })
     }
 }

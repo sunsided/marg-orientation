@@ -10,6 +10,7 @@ macro_rules! impl_standard_traits {
             $type_param: Default,
         {
             /// Constructs a new instance from a slice.
+            #[allow(unused)]
             #[inline]
             pub fn from_slice(slice: &[$type_param]) -> &Self {
                 assert_eq!(
@@ -22,6 +23,7 @@ macro_rules! impl_standard_traits {
             }
 
             /// Constructs a new instance from a mutable slice.
+            #[allow(unused)]
             #[inline]
             pub fn from_mut_slice(slice: &mut [$type_param]) -> &mut Self {
                 assert_eq!(
@@ -98,6 +100,7 @@ macro_rules! impl_standard_traits {
         paste::paste! {
             #[cfg(test)]
             mod [<tests_gen_ $type_name:lower>] {
+                #[cfg(feature = "unsafe")]
                 use super::*;
 
                 #[test]
