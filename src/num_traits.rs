@@ -27,6 +27,8 @@ pub trait ArcSin<T> {
     fn arcsin(self) -> Self::Output;
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
 impl ArcTan<f32> for f32 {
     type Output = f32;
 
@@ -36,6 +38,8 @@ impl ArcTan<f32> for f32 {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
 impl ArcTan<f64> for f64 {
     type Output = f64;
 
@@ -45,6 +49,8 @@ impl ArcTan<f64> for f64 {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
 impl ArcSin<f32> for f32 {
     type Output = f32;
 
@@ -54,6 +60,8 @@ impl ArcSin<f32> for f32 {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
 impl ArcSin<f64> for f64 {
     type Output = f64;
 
@@ -85,29 +93,8 @@ where
     }
 }
 
-#[cfg_attr(docsrs, doc(cfg(not(feature = "std"))))]
-#[cfg(not(feature = "std"))]
-impl DetectGimbalLock<f32> for f32 {
-    #[inline]
-    fn close_to_zenith_or_nadir(&self, tolerance: f32) -> bool {
-        let a = (*self - f32::ZENITH).abs();
-        let b = (*self - f32::NADIR).abs();
-        a <= tolerance || b.abs() <= tolerance
-    }
-}
-
-#[cfg_attr(docsrs, doc(cfg(not(feature = "std"))))]
-#[cfg(not(feature = "std"))]
-impl DetectGimbalLock<f64> for f64 {
-    #[inline]
-    fn close_to_zenith_or_nadir(&self, tolerance: f64) -> bool {
-        let a = (*self - f64::ZENITH).abs();
-        let b = (*self - f64::NADIR).abs();
-        a <= tolerance || b.abs() <= tolerance
-    }
-}
-
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests {
     use super::*;
 

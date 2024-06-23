@@ -674,6 +674,7 @@ type OwnedObservation<T> = RegularObservation<
 >;
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests {
     use super::*;
     use crate::accelerometer_reading::AccelerometerReading;
