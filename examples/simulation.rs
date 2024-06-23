@@ -3,6 +3,10 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::error::Error;
 
+use kiss3d::light::Light;
+use kiss3d::nalgebra::{Translation3, UnitQuaternion, Vector3};
+use kiss3d::window::Window;
+
 /// MPU6050 accelerometer and gyroscope readings.
 ///
 /// The deserialization ignores the temperature readings.
@@ -72,6 +76,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Average sample rates:");
     println!("- MPU6050 readings:  {mpu6050_sample_rate} Hz (expected 100 Hz)");
     println!("- HMC8533L readings: {hmc8533l_sample_rate} Hz (expected 75 Hz)");
+
+    let mut window = Window::new("Kiss3d: cube");
+    let mut c = window.add_cube(0.02, 0.02, 0.02);
+    c.set_color(1.0, 1.0, 1.0);
+
+    let mut c = window.add_cone(0.01, 1.0);
+    c.prepend_to_local_translation(&Translation3::new(0.0, 0.5, 0.0));
+
+    c.set_color(1.0, 0.0, 0.0);
+
+    window.set_light(Light::StickToCamera);
+
+    let rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.014);
+
+    while window.render() {
+        c.append_rotation(&rot);
+    }
 
     Ok(())
 }
