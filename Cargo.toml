@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-std = ["minikalman/std"]
+std = ["minikalman/std", "num-traits/std"]
 unsafe = []
 
 [dependencies]
 minikalman = { version = "0.6.0", default-features = false }
+num-traits = { version = "0.2.19", default-features = false }
 
 [dev-dependencies]
 ensure-uniform-type = "0.1.1"
