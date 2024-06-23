@@ -1,4 +1,4 @@
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! impl_standard_traits {
     ($type_name:ident, $type_param:ident) => {
         impl<$type_param> Copy for $type_name<$type_param> where $type_param: Copy {}
@@ -13,7 +13,7 @@ macro_rules! impl_standard_traits {
             #[allow(unused)]
             #[inline]
             pub fn from_slice(slice: &[$type_param]) -> &Self {
-                assert_eq!(
+                core::assert_eq!(
                     slice.len(),
                     core::mem::size_of::<Self>() / core::mem::size_of::<$type_param>()
                 );
@@ -26,7 +26,7 @@ macro_rules! impl_standard_traits {
             #[allow(unused)]
             #[inline]
             pub fn from_mut_slice(slice: &mut [$type_param]) -> &mut Self {
-                assert_eq!(
+                core::assert_eq!(
                     slice.len(),
                     core::mem::size_of::<Self>() / core::mem::size_of::<$type_param>()
                 );
@@ -111,8 +111,8 @@ macro_rules! impl_standard_traits {
                     const ARRAY_SIZE: usize = NUM_ELEMS + 1;
                     let data = [0; ARRAY_SIZE];
                     let state = $type_name::from_slice(&data[..NUM_ELEMS]);
-                    assert_eq!(state.len(), NUM_ELEMS);
-                    assert!(core::ptr::eq(state.as_ptr(), data.as_ptr()));
+                    core::assert_eq!(state.len(), NUM_ELEMS);
+                    core::assert!(core::ptr::eq(state.as_ptr(), data.as_ptr()));
                 }
 
                 #[test]
@@ -125,9 +125,9 @@ macro_rules! impl_standard_traits {
                     {
                         let state = $type_name::from_mut_slice(&mut data[..NUM_ELEMS]);
                         state[0] = 10;
-                        assert!(core::ptr::eq(state.as_ptr(), data.as_ptr()));
+                        core::assert!(core::ptr::eq(state.as_ptr(), data.as_ptr()));
                     }
-                    assert_eq!(data[0], 10, "expect data to be changed");
+                    core::assert_eq!(data[0], 10, "expect data to be changed");
                 }
             }
         }
