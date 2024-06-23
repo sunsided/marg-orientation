@@ -156,6 +156,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             &Point3::new(1.0, 1.0, 1.0),
         );
 
+        // Display default coordinate system.
+        window.draw_line(
+            &Point3::default(),
+            &Point3::new(1.0, 0.0, 0.0),
+            &Point3::new(1.0, 0.0, 0.0),
+        );
+        window.draw_line(
+            &Point3::default(),
+            &Point3::new(0.0, 1.0, 0.0),
+            &Point3::new(0.0, 1.0, 0.0),
+        );
+        window.draw_line(
+            &Point3::default(),
+            &Point3::new(0.0, 0.0, 1.0),
+            &Point3::new(0.0, 0.0, 1.0),
+        );
+
         // Display simulation indexes.
         let info = format!(
             "th = {:.2} s (#{})",
@@ -169,9 +186,22 @@ fn main() -> Result<(), Box<dyn Error>> {
             &Point3::new(1.0, 1.0, 1.0),
         );
 
+        let mpu6050_meas = &mpu6050[mpu6050_index];
+        let hmc5833l_meas = &hmc5833l[hmc8583l_index];
+
+        // Display the accelerometer reading.
         let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(1.0, 1.0, 1.0);
-        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.0));
+        let p2 = Point3::new(mpu6050_meas.acc_x, mpu6050_meas.acc_y, mpu6050_meas.acc_z);
+        window.draw_line(&p1, &p2, &Point3::new(1.0, 1.0, 0.0));
+
+        // Display the compass reading.
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(
+            hmc5833l_meas.compass_x,
+            hmc5833l_meas.compass_y,
+            hmc5833l_meas.compass_z,
+        );
+        window.draw_line(&p1, &p2, &Point3::new(0.0, 1.0, 1.0));
     }
 
     Ok(())
