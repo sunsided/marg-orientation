@@ -1,6 +1,13 @@
 [package]
 name = "marg-orientation"
+description = "A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator"
 version = "0.1.0"
+authors = ["Markus Mayer"]
+homepage = "https://github.com/sunsided/marg-orientation"
+repository = "https://github.com/sunsided/marg-orientation"
+license = "EUPL-1.2"
+keywords = ["kalman-filter", "embedded", "robotics", "imu", "estimation"]
+categories = ["aerospace", "algorithms", "science::robotics", "no-std", "embedded"]
 edition = "2021"
 
 [features]

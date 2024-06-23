@@ -410,7 +410,7 @@ impl<T> OwnedOrientationEstimator<T> {
         )
     }
 
-    /// Builds the Kalman filter used for prediction.
+    /// Builds the Kalman filter control input.
     fn build_control() -> OwnedControlInput<T>
     where
         T: MatrixDataType + Default,
@@ -462,7 +462,7 @@ impl<T> OwnedOrientationEstimator<T> {
         )
     }
 
-    /// Builds the Kalman filter used for prediction.
+    /// Builds the Kalman filter observation used for the prediction.
     fn build_measurement() -> OwnedObservation<T>
     where
         T: MatrixDataType + Default,
