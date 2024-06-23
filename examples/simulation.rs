@@ -91,13 +91,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut c = window.add_cube(0.02, 0.02, 0.02);
     c.set_color(1.0, 1.0, 1.0);
 
-    let mut c = window.add_cone(0.01, 1.0);
-    c.prepend_to_local_translation(&Translation3::new(0.0, 0.5, 0.0));
-    c.set_color(1.0, 0.0, 0.0);
-
     window.set_light(Light::StickToCamera);
 
-    let rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.014);
+    let mut mpu6050_index = 0;
+    let mut hmc8583l_index = 0;
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
@@ -107,6 +104,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         let elapsed_time = now - last_time;
         simulation_time += elapsed_time;
         last_time = now;
+
+        // Increment simulation index.
+        while mpu6050[mpu6050_index].time < simulation_time.as_secs_f32() {
+            mpu6050_index += 1;
+            if mpu6050_index >= mpu6050.len() {
+                mpu6050_index = 0;
+                hmc8583l_index = 0;
+                simulation_time = Duration::default();
+            }
+        }
+        while hmc5833l[hmc8583l_index].time < simulation_time.as_secs_f32() {
+            hmc8583l_index += 1;
+            if hmc8583l_index >= hmc5833l.len() {
+                mpu6050_index = 0;
+                hmc8583l_index = 0;
+                simulation_time = Duration::default();
+            }
+        }
 
         // Display elapsed time since last frame.
         let info = format!("ΔT = {:.4} s", elapsed_time.as_secs_f32());
@@ -128,10 +143,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             &Point3::new(1.0, 1.0, 1.0),
         );
 
+        // Display simulation indexes.
+        let info = format!(
+            "tm = {:.2} s (#{})",
+            mpu6050[mpu6050_index].time, mpu6050_index
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 64.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display simulation indexes.
+        let info = format!(
+            "th = {:.2} s (#{})",
+            hmc5833l[hmc8583l_index].time, hmc8583l_index
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 92.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
         let p1 = Point3::new(0.0, 0.0, 0.0);
         let p2 = Point3::new(1.0, 1.0, 1.0);
         window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.0));
-        c.append_rotation(&rot);
     }
 
     Ok(())
