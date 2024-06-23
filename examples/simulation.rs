@@ -2,9 +2,12 @@ use csv::ReaderBuilder;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::error::Error;
+use std::path::Path;
+use std::time::{Duration, Instant};
 
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Translation3, UnitQuaternion, Vector3};
+use kiss3d::nalgebra::{Point2, Point3, Translation3, UnitQuaternion, Vector3};
+use kiss3d::text::Font;
 use kiss3d::window::Window;
 
 /// MPU6050 accelerometer and gyroscope readings.
@@ -77,20 +80,57 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("- MPU6050 readings:  {mpu6050_sample_rate} Hz (expected 100 Hz)");
     println!("- HMC8533L readings: {hmc8533l_sample_rate} Hz (expected 75 Hz)");
 
-    let mut window = Window::new("Kiss3d: cube");
+    let font = Font::new(Path::new(
+        "examples/data/fonts/firamono/FiraMono-Regular.ttf",
+    ))
+    .expect("failed to load font");
+
+    let mut window = Window::new("MPU6050 and HMC8533L simulation");
+    window.set_framerate_limit(Some(30));
+
     let mut c = window.add_cube(0.02, 0.02, 0.02);
     c.set_color(1.0, 1.0, 1.0);
 
     let mut c = window.add_cone(0.01, 1.0);
     c.prepend_to_local_translation(&Translation3::new(0.0, 0.5, 0.0));
-
     c.set_color(1.0, 0.0, 0.0);
 
     window.set_light(Light::StickToCamera);
 
     let rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.014);
 
+    let mut last_time = Instant::now();
+    let mut simulation_time = Duration::default();
     while window.render() {
+        // Obtain the current render timestamp.
+        let now = Instant::now();
+        let elapsed_time = now - last_time;
+        simulation_time += elapsed_time;
+        last_time = now;
+
+        // Display elapsed time since last frame.
+        let info = format!("ΔT = {:.4} s", elapsed_time.as_secs_f32());
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 0.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display simulation time.
+        let info = format!(" t = {:.2} s", simulation_time.as_secs_f32());
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 32.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(1.0, 1.0, 1.0);
+        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.0));
         c.append_rotation(&rot);
     }
 
