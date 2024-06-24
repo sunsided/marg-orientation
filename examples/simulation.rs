@@ -86,10 +86,14 @@ impl From<&HMC5833L> for MagnetometerReading<f32> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mpu6050 =
-        read_csv::<MPU6050>("tests/data/sensor-fusion/data/set-2/full-sphere/mpu6050.csv")?;
-    let hmc5833l =
-        read_csv::<HMC5833L>("tests/data/sensor-fusion/data/set-2/full-sphere/hmc5833l.csv")?;
+    let dataset = "set-2/unmoved-with-x-pointing-forward";
+
+    let mpu6050 = read_csv::<MPU6050>(
+        format!("tests/data/sensor-fusion/data/{dataset}/mpu6050.csv").as_str(),
+    )?;
+    let hmc5833l = read_csv::<HMC5833L>(
+        format!("tests/data/sensor-fusion/data/{dataset}/hmc5833l.csv").as_str(),
+    )?;
 
     // println!("{:#?}", mpu6050[0]);
     // println!("{:#?}", hmc5833l[0]);
