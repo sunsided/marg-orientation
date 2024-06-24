@@ -1,4 +1,5 @@
 use csv::ReaderBuilder;
+use kiss3d::camera::FirstPerson;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::error::Error;
@@ -129,12 +130,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     window.set_light(Light::StickToCamera);
 
+    // Create a custom camera where Z is up, Y is forward, and X is right
+    // Position the camera such that it aligns with the new coordinate system
+    let eye = Point3::new(0.5, -2.0, 0.5);
+    let at = Point3::new(0.1, 0.1, 0.1);
+    let mut camera = FirstPerson::new(eye, at);
+    camera.set_up_axis(Vector3::new(0.0, 0.0, 1.0));
+
+    // Walk through the simulation data.
     let mut mpu6050_index = 0;
     let mut hmc8583l_index = 0;
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
-    while window.render() {
+    while window.render_with_camera(&mut camera) {
         // Obtain the current render timestamp.
         let now = Instant::now();
         let elapsed_time = now - last_time;

@@ -655,8 +655,8 @@ impl<T> OwnedOrientationEstimator<T> {
             );
 
         let noise_covariance_value = accelerometer_noise.x * magnetometer_noise.x
-            + accelerometer_noise.y
-            + magnetometer_noise.y * accelerometer_noise.z * magnetometer_noise.z;
+            + accelerometer_noise.y * magnetometer_noise.y
+            + accelerometer_noise.z * magnetometer_noise.z;
         noise_covariance.make_scalar(noise_covariance_value);
 
         // Innovation vector
