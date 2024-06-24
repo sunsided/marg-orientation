@@ -73,8 +73,8 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + Default,
     {
-        let filter = Self::build_filter(&gyroscope_noise);
-        let control = Self::build_control(&gyroscope_noise);
+        let filter = Self::build_filter(&gyroscope_noise, epsilon);
+        let control = Self::build_control(&gyroscope_noise, epsilon);
         let measurement = Self::build_measurement(&accelerometer_noise, &magnetometer_noise);
 
         Self {
@@ -267,6 +267,7 @@ impl<T> OwnedOrientationEstimator<T> {
     /// ## Arguments
     /// * `accelerometer` - The normalized accelerometer vector.
     /// * `magnetometer` - The normalized magnetometer vector.
+    #[allow(unused)]
     fn update_measurement_noise(&mut self, accelerometer: Vector3<T>, magnetometer: Vector3<T>)
     where
         T: MatrixDataType + core::fmt::Debug,
@@ -366,7 +367,7 @@ impl<T> OwnedOrientationEstimator<T> {
         r.set_symmetric(1, 2, T::zero());
 
         // Row 3, column 3.
-        let r33 = (ax2 * sa22 + ay2 * sa11) / sq(ax2 + ay2 + epsilon);
+        let r33 = (ax2 * sa22 + ay2 * sa11) / (sq(ax2 + ay2) + epsilon);
         r.set_at(2, 2, r33);
         */
     }
@@ -458,7 +459,10 @@ where
 
 impl<T> OwnedOrientationEstimator<T> {
     /// Builds the Kalman filter used for prediction.
-    fn build_filter(gyroscope_noise: &GyroscopeNoise<T>) -> OwnedKalmanFilter<T>
+    fn build_filter(
+        gyroscope_noise: &GyroscopeNoise<T>,
+        process_noise_value: T,
+    ) -> OwnedKalmanFilter<T>
     where
         T: MatrixDataType + Default,
     {
@@ -493,7 +497,15 @@ impl<T> OwnedOrientationEstimator<T> {
             ));
         estimate_covariance.apply(|mat| {
             mat.set_at(0, 0, gyroscope_noise.x);
+            // mat.set_at(0, 1, gyroscope_noise.z * gyroscope_noise.x);
+            // mat.set_at(0, 2, gyroscope_noise.y * gyroscope_noise.x);
+
+            // mat.set_at(1, 0, gyroscope_noise.z * gyroscope_noise.y);
             mat.set_at(1, 1, gyroscope_noise.y);
+            // mat.set_at(1, 2, gyroscope_noise.x * gyroscope_noise.y);
+
+            // mat.set_at(2, 0, gyroscope_noise.y * gyroscope_noise.z);
+            // mat.set_at(2, 1, gyroscope_noise.x * gyroscope_noise.z);
             mat.set_at(2, 2, gyroscope_noise.z);
         });
 
@@ -503,11 +515,7 @@ impl<T> OwnedOrientationEstimator<T> {
                 [zero; { STATES * STATES }],
             ),
         );
-        process_noise.apply(|mat| {
-            mat.set_at(0, 0, gyroscope_noise.x);
-            mat.set_at(1, 1, gyroscope_noise.y);
-            mat.set_at(2, 2, gyroscope_noise.z);
-        });
+        process_noise.make_scalar(process_noise_value);
 
         // Predicted state vector.
         let mut predicted_state =
@@ -541,7 +549,10 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Builds the Kalman filter control input.
-    fn build_control(gyroscope_noise: &GyroscopeNoise<T>) -> OwnedControlInput<T>
+    fn build_control(
+        gyroscope_noise: &GyroscopeNoise<T>,
+        process_noise_value: T,
+    ) -> OwnedControlInput<T>
     where
         T: MatrixDataType + Default,
     {
@@ -577,11 +588,7 @@ impl<T> OwnedOrientationEstimator<T> {
                 [zero; CONTROLS * CONTROLS],
             ),
         );
-        process_noise.apply(|mat| {
-            mat.set_at(0, 0, gyroscope_noise.x);
-            mat.set_at(1, 1, gyroscope_noise.y);
-            mat.set_at(2, 2, gyroscope_noise.z);
-        });
+        process_noise.make_scalar(process_noise_value);
 
         // Temporary matrix.
         let temp = TemporaryBQMatrixBuffer::<STATES, CONTROLS, T, _>::new(MatrixData::new_array::<
@@ -646,21 +653,11 @@ impl<T> OwnedOrientationEstimator<T> {
                     T,
                 >([zero; { OBSERVATIONS * OBSERVATIONS }]),
             );
-        noise_covariance.apply(|mat| {
-            mat.set_symmetric(
-                0,
-                0,
-                accelerometer_noise.x
-                    + accelerometer_noise.z
-                    + magnetometer_noise.x
-                    + magnetometer_noise.z,
-            );
-            mat.set_symmetric(0, 1, magnetometer_noise.z);
-            mat.set_symmetric(0, 2, accelerometer_noise.y);
 
-            mat.set_at(1, 1, accelerometer_noise.z);
-            mat.set_at(2, 2, accelerometer_noise.x + accelerometer_noise.y);
-        });
+        let noise_covariance_value = accelerometer_noise.x * magnetometer_noise.x
+            + accelerometer_noise.y
+            + magnetometer_noise.y * accelerometer_noise.z * magnetometer_noise.z;
+        noise_covariance.make_scalar(noise_covariance_value);
 
         // Innovation vector
         let innovation_vector =

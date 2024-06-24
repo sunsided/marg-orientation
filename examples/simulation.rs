@@ -109,9 +109,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
         0.01,
-        AccelerometerNoise::new(0.02, 0.02, 0.02),
-        GyroscopeNoise::new(0.3, 0.3, 0.3),
-        MagnetometerNoise::new(0.1, 0.1, 0.1),
+        AccelerometerNoise::new(0.07, 0.07, 0.07),
+        GyroscopeNoise::new(0.54, 0.1, 0.13),
+        MagnetometerNoise::new(0.18, 0.11, 0.34),
         1e-6,
     );
 
