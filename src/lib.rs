@@ -431,12 +431,6 @@ impl<T> OwnedOrientationEstimator<T> {
         let b2 = (m - a * (m * a)).normalized();
         let b3 = b2.cross(b1);
 
-        // b1 = z (up)
-        // b2 = x (right)
-        // b3 = y (forward)
-        let b4 = m.cross(a).normalized();
-        let b2 = b1.cross(b4).normalized();
-
         // TRIAD rotation matrix: [b1, b2, b3], stacked columns
 
         // Derive Euler angles from TRIAD rotation matrix (ZYX sequence).
