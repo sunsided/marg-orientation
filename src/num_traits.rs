@@ -15,6 +15,18 @@ pub trait DetectGimbalLock<T>: GimbalLockZenithNadir<T> {
     fn close_to_zenith_or_nadir(&self, tolerance: T) -> bool;
 }
 
+pub trait IsNaN {
+    /// Determines whether this value represents "not a number" (NaN).
+    fn is_nan(&self) -> bool;
+}
+
+pub trait NormalizeAngle<T> {
+    type Output;
+
+    /// Normalizes the angle into the range -π to π.
+    fn normalize_angle(self) -> Self::Output;
+}
+
 pub trait ArcTan<T> {
     type Output;
 
@@ -25,6 +37,54 @@ pub trait ArcSin<T> {
     type Output;
 
     fn arcsin(self) -> Self::Output;
+}
+
+impl IsNaN for f32 {
+    #[inline(always)]
+    fn is_nan(&self) -> bool {
+        (*self).is_nan()
+    }
+}
+
+impl IsNaN for f64 {
+    #[inline(always)]
+    fn is_nan(&self) -> bool {
+        (*self).is_nan()
+    }
+}
+
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
+impl NormalizeAngle<f32> for f32 {
+    type Output = f32;
+
+    fn normalize_angle(self) -> Self::Output {
+        let mut normalized = self;
+        while normalized > std::f32::consts::PI {
+            normalized -= 2.0 * std::f32::consts::PI;
+        }
+        while normalized < -std::f32::consts::PI {
+            normalized += 2.0 * std::f32::consts::PI;
+        }
+        normalized
+    }
+}
+
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
+impl NormalizeAngle<f64> for f64 {
+    type Output = f64;
+
+    fn normalize_angle(self) -> Self::Output {
+        let mut normalized = self;
+        while normalized > std::f64::consts::PI {
+            normalized -= std::f64::consts::TAU;
+        }
+        while normalized < -std::f64::consts::PI {
+            normalized += std::f64::consts::TAU;
+        }
+        normalized
+    }
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]

@@ -16,11 +16,12 @@ mod magnetometer_reading;
 mod num_traits;
 mod vector3;
 
-use crate::accelerometer_noise::AccelerometerNoise;
-use crate::accelerometer_reading::AccelerometerReading;
-use crate::euler_angles::EulerAngles;
-use crate::magnetometer_noise::MagnetometerNoise;
-use crate::magnetometer_reading::MagnetometerReading;
+pub use crate::accelerometer_noise::AccelerometerNoise;
+pub use crate::accelerometer_reading::AccelerometerReading;
+pub use crate::euler_angles::EulerAngles;
+pub use crate::gyroscope_reading::GyroscopeReading;
+pub use crate::magnetometer_noise::MagnetometerNoise;
+pub use crate::magnetometer_reading::MagnetometerReading;
 use crate::vector3::Vector3;
 use core::ops::Neg;
 use minikalman::buffers::types::*;
@@ -36,10 +37,7 @@ const STATES: usize = 3; // roll rate, pitch rate, yaw rate
 const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate
 const OBSERVATIONS: usize = 3; // roll, pitch, yaw
 
-/// A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator.
-pub struct OrientationEstimator {}
-
-/// An owned orientation estimator with generic type `T`.
+/// A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator with generic type `T`.
 pub struct OwnedOrientationEstimator<T> {
     filter: OwnedKalmanFilter<T>,
     control: OwnedControlInput<T>,
@@ -88,14 +86,90 @@ impl<T> OwnedOrientationEstimator<T> {
 }
 
 impl<T> OwnedOrientationEstimator<T> {
+    /// Obtains the current estimates of the roll, pitch and yaw angles.
+    pub fn estimated_angles(&self) -> EulerAngles<T>
+    where
+        T: Copy,
+    {
+        EulerAngles::new(self.roll(), self.pitch(), self.yaw())
+    }
+
+    /// Obtains the current estimate of the roll angle φ (phi), in radians.
+    pub fn roll(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(0)
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the roll angle φ (phi), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn roll_variance(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.estimate_covariance().get_at(0, 0)
+    }
+
+    /// Obtains the current estimate of the pitch angle θ (theta), in radians.
+    pub fn pitch(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(1)
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the pitch angle θ (theta), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn pitch_variance(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.estimate_covariance().get_at(1, 1)
+    }
+
+    /// Obtains the current estimate of the yaw angle ψ (psi), in radians.
+    pub fn yaw(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(2)
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the yaw angle ψ (psi), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn yaw_variance(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.estimate_covariance().get_at(2, 2)
+    }
+}
+
+impl<T> OwnedOrientationEstimator<T> {
     /// Performs a prediction step to obtain new orientation estimates.
     ///
     /// ## Arguments
     /// * `delta_t` - The time step for the prediction.
-    /// * `angular_rates` - The angular rates measured by the magnetometer.
-    pub fn predict(&mut self, delta_t: T, angular_rates: &MagnetometerReading<T>)
+    /// * `angular_rates` - The angular rates measured by the gyroscope.
+    pub fn predict(&mut self, delta_t: T, angular_rates: &GyroscopeReading<T>)
     where
-        T: MatrixDataType + Default,
+        T: MatrixDataType + Default + NormalizeAngle<T, Output = T> + IsNaN,
     {
         // Update the Kalman filter components.
         self.update_state_transition_matrix(delta_t, angular_rates);
@@ -103,9 +177,14 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Perform a regular Kalman Filter prediction step.
         self.filter.predict();
-        self.filter.control(&mut self.control);
+        self.panic_if_nan();
 
-        // TODO: Clamp any angles?
+        // Apply the Gyro control input.
+        self.filter.control(&mut self.control);
+        self.panic_if_nan();
+
+        // Normalize the state estimates.
+        self.normalize_angles();
     }
 
     /// Performs a correction step using accelerometer and magnetometer readings.
@@ -121,8 +200,10 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType
             + ArcSin<T, Output = T>
             + ArcTan<T, Output = T>
+            + NormalizeAngle<T, Output = T>
             + DetectGimbalLock<T>
-            + core::fmt::Debug,
+            + core::fmt::Debug
+            + IsNaN,
     {
         // Normalize the vectors.
         let a = Vector3::from(accelerometer).normalized();
@@ -141,8 +222,35 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Perform the update step.
         self.filter.correct(&mut self.measurement);
+        self.panic_if_nan();
 
-        // TODO: Clamp any angles?
+        // Normalize the state estimates.
+        self.normalize_angles();
+    }
+
+    // Normalizes the state estimates.
+    fn normalize_angles(&mut self)
+    where
+        T: Copy + NormalizeAngle<T, Output = T>,
+    {
+        self.filter.state_vector_mut().apply(|vec| {
+            vec.set_row(0, vec.get_row(0).normalize_angle());
+            vec.set_row(1, vec.get_row(1).normalize_angle());
+            vec.set_row(2, vec.get_row(2).normalize_angle());
+        });
+    }
+
+    #[allow(unused)]
+    fn panic_if_nan(&self)
+    where
+        T: Copy + IsNaN,
+    {
+        #[cfg(debug_assertions)]
+        self.filter.state_vector().inspect(|vec| {
+            if vec.get_row(0).is_nan() || vec.get_row(1).is_nan() || vec.get_row(2).is_nan() {
+                panic!("NaN angle detected in state estimate")
+            }
+        });
     }
 
     /// Computes the Jacobian matrices and measurement noise matrix for orientation estimation
@@ -159,6 +267,10 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + core::fmt::Debug,
     {
+        self.measurement
+            .measurement_noise_covariance_mut()
+            .make_scalar(self.epsilon);
+        /*
         // Easy access to accelerometer noise.
         let sa11 = self.accelerometer_noise.x; // sigma_a_xx
         let sa22 = self.accelerometer_noise.y; // sigma_a_yy
@@ -255,39 +367,40 @@ impl<T> OwnedOrientationEstimator<T> {
         // Row 3, column 3.
         let r33 = (ax2 * sa22 + ay2 * sa11) / sq(ax2 + ay2 + epsilon);
         r.set_at(2, 2, r33);
+        */
     }
 
     /// Constructs the state transition matrix based on the angular rates.
-    fn update_state_transition_matrix(&mut self, delta_t: T, angular_rates: &MagnetometerReading<T>)
+    fn update_state_transition_matrix(&mut self, delta_t: T, angular_rates: &GyroscopeReading<T>)
     where
         T: MatrixDataType + Default,
     {
         let rates = *angular_rates * delta_t;
         self.filter.state_transition_mut().apply(|mat| {
             mat.set_at(0, 0, T::one());
-            mat.set_at(0, 1, -rates.z);
-            mat.set_at(0, 2, rates.y);
+            mat.set_at(0, 1, -rates.omega_z);
+            mat.set_at(0, 2, rates.omega_y);
 
-            mat.set_at(1, 0, rates.z);
+            mat.set_at(1, 0, rates.omega_z);
             mat.set_at(1, 1, T::one());
-            mat.set_at(1, 2, -rates.x);
+            mat.set_at(1, 2, -rates.omega_x);
 
-            mat.set_at(2, 0, -rates.y);
-            mat.set_at(2, 1, rates.x);
+            mat.set_at(2, 0, -rates.omega_y);
+            mat.set_at(2, 1, rates.omega_x);
             mat.set_at(2, 2, T::one());
         });
     }
 
     /// Constructs the state transition matrix based on the angular rates.
-    fn update_control_input(&mut self, delta_t: T, angular_rates: &MagnetometerReading<T>)
+    fn update_control_input(&mut self, delta_t: T, angular_rates: &GyroscopeReading<T>)
     where
         T: MatrixDataType + Default,
     {
         let rates = *angular_rates * delta_t;
         self.control.control_vector_mut().apply(|vec| {
-            vec.set_row(0, rates.x);
-            vec.set_row(1, rates.y);
-            vec.set_row(2, rates.z);
+            vec.set_row(0, rates.omega_x);
+            vec.set_row(1, rates.omega_y);
+            vec.set_row(2, rates.omega_z);
         });
     }
 
@@ -302,7 +415,8 @@ impl<T> OwnedOrientationEstimator<T> {
             + ArcTan<T, Output = T>
             + ArcSin<T, Output = T>
             + Neg<Output = T>
-            + DetectGimbalLock<T>,
+            + DetectGimbalLock<T>
+            + NormalizeAngle<T, Output = T>,
     {
         // Calculate TRIAD vectors.
         let b1 = a;
@@ -311,17 +425,17 @@ impl<T> OwnedOrientationEstimator<T> {
         // TRIAD rotation matrix: [b1, b2, b3], stacked columns
 
         // Derive Euler angles from TRIAD rotation matrix (ZYX sequence).
-        let theta = -ArcSin::arcsin(b1.z); // pitch
+        let theta = (-ArcSin::arcsin(b1.z)).normalize_angle(); // pitch
 
         // Handle Gimbal lock situations.
         if theta.close_to_zenith_or_nadir(self.gimbal_lock_tolerance) {
             let psi = ArcTan::atan2(-b3.y, b2.y); // yaw
             let phi = T::zero(); // roll
-            EulerAngles::new(phi, theta, psi)
+            EulerAngles::new(phi.normalize_angle(), theta, psi.normalize_angle())
         } else {
             let psi = ArcTan::atan2(b1.y, b1.x); // yaw
             let phi = ArcTan::atan2(b2.z, b3.z); // roll
-            EulerAngles::new(phi, theta, psi)
+            EulerAngles::new(phi.normalize_angle(), theta, psi.normalize_angle())
         }
     }
 }
@@ -729,7 +843,7 @@ mod tests {
             .make_scalar(0.01);
 
         let delta_t: f32 = 0.1;
-        let angular_rates = MagnetometerReading::new(0.01, 0.02, -0.01);
+        let angular_rates = GyroscopeReading::new(0.01, 0.02, -0.01);
         estimator.predict(delta_t, &angular_rates);
 
         estimator.filter.state_transition().inspect(|mat| {
