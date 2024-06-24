@@ -288,6 +288,108 @@ fn main() -> Result<(), Box<dyn Error>> {
             &Point3::new(1.0, 1.0, 1.0),
         );
 
+        // Display magnetometer.
+        let info = format!("Bx = {:+0.02} Gs", hmc5833l_meas.compass_x);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 15.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display magnetometer.
+        let info = format!("By = {:+0.02} Gs", hmc5833l_meas.compass_y);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 14.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display magnetometer.
+        let info = format!("Bz = {:+0.02} Gs", hmc5833l_meas.compass_z);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 13.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display acceleration.
+        let info = format!("ax = {:+0.02} G", mpu6050_meas.acc_x);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 11.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display acceleration.
+        let info = format!("ay = {:+0.02} G", mpu6050_meas.acc_y);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 10.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display acceleration.
+        let info = format!("az = {:+0.02} G", mpu6050_meas.acc_z);
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 9.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display gyro roll rates.
+        let info = format!(
+            "ωx = {:+0.02} rad/s ({:+0.02}°/s)",
+            mpu6050_meas.gyro_x,
+            mpu6050_meas.gyro_x * 180.0 / std::f32::consts::PI
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 7.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display gyro roll rates.
+        let info = format!(
+            "ωy = {:+0.02} rad/s ({:+0.02}°/s)",
+            mpu6050_meas.gyro_y,
+            mpu6050_meas.gyro_y * 180.0 / std::f32::consts::PI
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 6.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display gyro roll rates.
+        let info = format!(
+            "ωz = {:+0.02} rad/s ({:+0.02}°/s)",
+            mpu6050_meas.gyro_z,
+            mpu6050_meas.gyro_z * 180.0 / std::f32::consts::PI
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 5.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
         // Display estimated angles.
         let info = format!(
             "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
