@@ -11,8 +11,8 @@ use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
 use kiss3d::text::Font;
 use kiss3d::window::Window;
 use marg_orientation::{
-    AccelerometerNoise, AccelerometerReading, GyroscopeNoise, GyroscopeReading, MagnetometerNoise,
-    MagnetometerReading, OwnedOrientationEstimator,
+    AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
+    MagnetometerNoise, MagnetometerReading, OwnedOrientationEstimator,
 };
 
 /// MPU6050 accelerometer and gyroscope readings.
@@ -76,7 +76,7 @@ impl From<&MPU6050> for AccelerometerReading<f32> {
 
 impl From<&MPU6050> for GyroscopeReading<f32> {
     fn from(value: &MPU6050) -> Self {
-        GyroscopeReading::new(value.gyro_x, value.gyro_y, value.gyro_z)
+        GyroscopeReading::new(value.gyro_z, -value.gyro_y, -value.gyro_x)
     }
 }
 
@@ -111,7 +111,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
         0.01,
         AccelerometerNoise::new(0.07, 0.07, 0.07),
-        GyroscopeNoise::new(0.54, 0.1, 0.13),
+        GyroscopeNoise::new(0.13, 0.1, 0.54),
+        // GyroscopeBias::new(1.0, 0.0, -4.0),
+        GyroscopeBias::default(),
         MagnetometerNoise::new(0.18, 0.11, 0.34),
         1e-6,
     );
@@ -271,9 +273,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display estimated orientation.
-        window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 1.0, 1.0));
-        window.draw_line(&Point3::default(), &filter_y, &Point3::new(1.0, 1.0, 1.0));
-        window.draw_line(&Point3::default(), &filter_z, &Point3::new(1.0, 1.0, 1.0));
+        window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 0.0, 0.0));
+        window.draw_line(&Point3::default(), &filter_y, &Point3::new(0.0, 1.0, 0.0));
+        window.draw_line(&Point3::default(), &filter_z, &Point3::new(0.0, 0.0, 1.0));
 
         // Display simulation indexes.
         let info = format!(
@@ -392,10 +394,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
             estimated_angles.roll_phi,
             estimator.roll_variance().sqrt(),
-            estimated_angles.roll_phi * 180.0 / std::f32::consts::PI
+            estimated_angles.roll_phi * 180.0 / std::f32::consts::PI,
+            estimator.roll_rate_bias()
         );
         window.draw_text(
             &info,
@@ -407,10 +410,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
             estimated_angles.pitch_theta,
             estimator.pitch_variance().sqrt(),
-            estimated_angles.pitch_theta * 180.0 / std::f32::consts::PI
+            estimated_angles.pitch_theta * 180.0 / std::f32::consts::PI,
+            estimator.pitch_rate_bias()
         );
         window.draw_text(
             &info,
@@ -422,10 +426,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
             estimated_angles.yaw_psi,
             estimator.yaw_variance().sqrt(),
-            estimated_angles.yaw_psi * 180.0 / std::f32::consts::PI
+            estimated_angles.yaw_psi * 180.0 / std::f32::consts::PI,
+            estimator.yaw_rate_bias()
         );
         window.draw_text(
             &info,

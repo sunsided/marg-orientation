@@ -9,6 +9,7 @@
 mod accelerometer_noise;
 mod accelerometer_reading;
 mod euler_angles;
+mod gyroscope_bias;
 mod gyroscope_noise;
 mod gyroscope_reading;
 mod macros;
@@ -20,6 +21,7 @@ mod vector3;
 pub use crate::accelerometer_noise::AccelerometerNoise;
 pub use crate::accelerometer_reading::AccelerometerReading;
 pub use crate::euler_angles::EulerAngles;
+pub use crate::gyroscope_bias::GyroscopeBias;
 pub use crate::gyroscope_noise::GyroscopeNoise;
 pub use crate::gyroscope_reading::GyroscopeReading;
 pub use crate::magnetometer_noise::MagnetometerNoise;
@@ -35,7 +37,7 @@ use minikalman::regular::{
 
 pub use crate::num_traits::*;
 
-const STATES: usize = 3; // roll rate, pitch rate, yaw rate
+const STATES: usize = 6; // roll rate, pitch rate, yaw rate, as well as gyro bias (drift) terms
 const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate
 const OBSERVATIONS: usize = 3; // roll, pitch, yaw
 
@@ -67,13 +69,14 @@ impl<T> OwnedOrientationEstimator<T> {
         gimbal_lock_tolerance: T,
         accelerometer_noise: AccelerometerNoise<T>,
         gyroscope_noise: GyroscopeNoise<T>,
+        gyroscope_bias: GyroscopeBias<T>,
         magnetometer_noise: MagnetometerNoise<T>,
         epsilon: T,
     ) -> Self
     where
         T: MatrixDataType + Default,
     {
-        let filter = Self::build_filter(&gyroscope_noise, epsilon);
+        let filter = Self::build_filter(&gyroscope_noise, &gyroscope_bias, epsilon);
         let control = Self::build_control(&gyroscope_noise, epsilon);
         let measurement = Self::build_measurement(&accelerometer_noise, &magnetometer_noise);
 
@@ -99,6 +102,8 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Obtains the current estimate of the roll angle φ (phi), in radians.
+    ///
+    /// The roll angle is defined as the amount rotation around the y-axis (forward).
     pub fn roll(&self) -> T
     where
         T: Copy,
@@ -120,7 +125,17 @@ impl<T> OwnedOrientationEstimator<T> {
         self.filter.estimate_covariance().get_at(0, 0)
     }
 
+    /// Obtains the current estimate of the bias term of the roll rate, in radians.
+    pub fn roll_rate_bias(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(3)
+    }
+
     /// Obtains the current estimate of the pitch angle θ (theta), in radians.
+    ///
+    /// The pitch angle is defined as the amount rotation around the x-axis (right).
     pub fn pitch(&self) -> T
     where
         T: Copy,
@@ -142,7 +157,17 @@ impl<T> OwnedOrientationEstimator<T> {
         self.filter.estimate_covariance().get_at(1, 1)
     }
 
+    /// Obtains the current estimate of the bias term of the pitch rate, in radians.
+    pub fn pitch_rate_bias(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(4)
+    }
+
     /// Obtains the current estimate of the yaw angle ψ (psi), in radians.
+    ///
+    /// The yaw angle is defined as the amount rotation around the z-axis (up).
     pub fn yaw(&self) -> T
     where
         T: Copy,
@@ -162,6 +187,14 @@ impl<T> OwnedOrientationEstimator<T> {
         T: Copy,
     {
         self.filter.estimate_covariance().get_at(2, 2)
+    }
+
+    /// Obtains the current estimate of the bias term of the yaw rate, in radians.
+    pub fn yaw_rate_bias(&self) -> T
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().get_row(5)
     }
 }
 
@@ -378,18 +411,35 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType + Default,
     {
         let rates = *angular_rates * delta_t;
+        let x_bias = self.roll_rate_bias() * delta_t;
+        let y_bias = self.pitch_rate_bias() * delta_t;
+        let z_bias = self.yaw_rate_bias() * delta_t;
+
         self.filter.state_transition_mut().apply(|mat| {
             mat.set_at(0, 0, T::one());
-            mat.set_at(0, 1, -rates.omega_z);
-            mat.set_at(0, 2, rates.omega_y);
+            mat.set_at(0, 1, -(rates.omega_z - z_bias));
+            mat.set_at(0, 2, rates.omega_y - y_bias);
+            mat.set_at(0, 3, -delta_t);
+            mat.set_at(0, 4, T::zero());
+            mat.set_at(0, 5, T::zero());
 
-            mat.set_at(1, 0, rates.omega_z);
+            mat.set_at(1, 0, rates.omega_z - z_bias);
             mat.set_at(1, 1, T::one());
-            mat.set_at(1, 2, -rates.omega_x);
+            mat.set_at(1, 2, -(rates.omega_x - x_bias));
+            mat.set_at(1, 3, T::zero());
+            mat.set_at(1, 4, -delta_t);
+            mat.set_at(1, 5, T::zero());
 
-            mat.set_at(2, 0, -rates.omega_y);
-            mat.set_at(2, 1, rates.omega_x);
+            mat.set_at(2, 0, -(rates.omega_y - y_bias));
+            mat.set_at(2, 1, rates.omega_x - x_bias);
             mat.set_at(2, 2, T::one());
+            mat.set_at(2, 3, T::zero());
+            mat.set_at(2, 4, T::zero());
+            mat.set_at(2, 5, -delta_t);
+
+            mat.set_at(3, 3, T::one());
+            mat.set_at(4, 4, T::one());
+            mat.set_at(5, 5, T::one());
         });
     }
 
@@ -462,6 +512,7 @@ impl<T> OwnedOrientationEstimator<T> {
     /// Builds the Kalman filter used for prediction.
     fn build_filter(
         gyroscope_noise: &GyroscopeNoise<T>,
+        gyroscope_bias: &GyroscopeBias<T>,
         process_noise_value: T,
     ) -> OwnedKalmanFilter<T>
     where
@@ -470,10 +521,13 @@ impl<T> OwnedOrientationEstimator<T> {
         let zero = T::default();
 
         // State vector.
-        let state_vec =
+        let mut state_vec =
             StateVectorBuffer::<STATES, T, _>::new(MatrixData::new_array::<STATES, 1, STATES, T>(
                 [zero; STATES],
             ));
+        state_vec.set_row(3, gyroscope_bias.omega_x);
+        state_vec.set_row(4, gyroscope_bias.omega_y);
+        state_vec.set_row(5, gyroscope_bias.omega_z);
 
         // State transition matrix.
         let state_transition =
@@ -508,6 +562,10 @@ impl<T> OwnedOrientationEstimator<T> {
             // mat.set_at(2, 0, gyroscope_noise.y * gyroscope_noise.z);
             // mat.set_at(2, 1, gyroscope_noise.x * gyroscope_noise.z);
             mat.set_at(2, 2, gyroscope_noise.z);
+
+            mat.set_at(3, 3, gyroscope_noise.x * gyroscope_noise.x);
+            mat.set_at(4, 4, gyroscope_noise.y * gyroscope_noise.y);
+            mat.set_at(5, 5, gyroscope_noise.z * gyroscope_noise.z);
         });
 
         // Process noise matrix.
@@ -864,6 +922,7 @@ mod tests {
         let gimbal_lock_tolerance = 0.01;
         let accelerometer_noise = AccelerometerNoise::new(0.01, 0.02, 0.03);
         let gyroscope_noise = GyroscopeNoise::new(0.04, 0.05, 0.06);
+        let gyroscope_bias = GyroscopeBias::default();
         let magnetometer_noise = MagnetometerNoise::new(0.07, 0.08, 0.09);
         let epsilon = 1e-6;
 
@@ -871,6 +930,7 @@ mod tests {
             gimbal_lock_tolerance,
             accelerometer_noise,
             gyroscope_noise,
+            gyroscope_bias,
             magnetometer_noise,
             epsilon,
         );
