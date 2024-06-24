@@ -10,7 +10,7 @@ use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
 use kiss3d::text::Font;
 use kiss3d::window::Window;
 use marg_orientation::{
-    AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
+    AccelerometerNoise, AccelerometerReading, GyroscopeNoise, GyroscopeReading, MagnetometerNoise,
     MagnetometerReading, OwnedOrientationEstimator,
 };
 
@@ -109,7 +109,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
         0.01,
-        AccelerometerNoise::new(0.2, 0.2, 0.2),
+        AccelerometerNoise::new(0.02, 0.02, 0.02),
+        GyroscopeNoise::new(0.3, 0.3, 0.3),
         MagnetometerNoise::new(0.1, 0.1, 0.1),
         1e-6,
     );
@@ -280,8 +281,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "φ = {:+0.02} rad ({:+0.02}°)",
+            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.roll_phi,
+            estimator.roll_variance().sqrt(),
             estimated_angles.roll_phi * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
@@ -294,8 +296,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "θ = {:+0.02} rad ({:+0.02}°)",
+            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.pitch_theta,
+            estimator.pitch_variance().sqrt(),
             estimated_angles.pitch_theta * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
@@ -308,8 +311,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "ψ = {:+0.02} rad ({:+0.02}°)",
+            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.yaw_psi,
+            estimator.yaw_variance().sqrt(),
             estimated_angles.yaw_psi * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
@@ -332,7 +336,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             hmc5833l_meas.compass_y,
             hmc5833l_meas.compass_z,
         );
-        window.draw_line(&p1, &p2, &Point3::new(0.0, 1.0, 1.0));
+        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 1.0));
     }
 
     Ok(())

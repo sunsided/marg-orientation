@@ -1,6 +1,6 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
-use core::ops::Mul;
+use core::ops::{Mul, Sub};
 
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
@@ -79,6 +79,21 @@ where
             omega_x: self.omega_x * rhs.clone(),
             omega_y: self.omega_y * rhs.clone(),
             omega_z: self.omega_z * rhs.clone(),
+        }
+    }
+}
+
+impl<T> Sub<T> for GyroscopeReading<T>
+where
+    T: Sub<T, Output = T> + Clone,
+{
+    type Output = GyroscopeReading<T>;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        Self {
+            omega_x: self.omega_x - rhs.clone(),
+            omega_y: self.omega_y - rhs.clone(),
+            omega_z: self.omega_z - rhs.clone(),
         }
     }
 }

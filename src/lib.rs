@@ -9,6 +9,7 @@
 mod accelerometer_noise;
 mod accelerometer_reading;
 mod euler_angles;
+mod gyroscope_noise;
 mod gyroscope_reading;
 mod macros;
 mod magnetometer_noise;
@@ -19,6 +20,7 @@ mod vector3;
 pub use crate::accelerometer_noise::AccelerometerNoise;
 pub use crate::accelerometer_reading::AccelerometerReading;
 pub use crate::euler_angles::EulerAngles;
+pub use crate::gyroscope_noise::GyroscopeNoise;
 pub use crate::gyroscope_reading::GyroscopeReading;
 pub use crate::magnetometer_noise::MagnetometerNoise;
 pub use crate::magnetometer_reading::MagnetometerReading;
@@ -58,20 +60,22 @@ impl<T> OwnedOrientationEstimator<T> {
     /// ## Arguments
     /// * `gimbal_lock_tolerance` - The angular tolerance, in radians, to detect a Gimbal Lock.
     /// * `accelerometer_noise` - The accelerometer noise values (sigma-squared) for each axis.
+    /// * `gyroscope_noise` - The gyroscope noise values (sigma-squared) for each axis.
     /// * `magnetometer_noise` - The magnetometer noise values (sigma-squared) for each axis.
     /// * `epsilon` - A small bias term to avoid divisions by zero. Set to e.g. `1e-6`.
     pub fn new(
         gimbal_lock_tolerance: T,
         accelerometer_noise: AccelerometerNoise<T>,
+        gyroscope_noise: GyroscopeNoise<T>,
         magnetometer_noise: MagnetometerNoise<T>,
         epsilon: T,
     ) -> Self
     where
         T: MatrixDataType + Default,
     {
-        let filter = Self::build_filter();
-        let control = Self::build_control();
-        let measurement = Self::build_measurement();
+        let filter = Self::build_filter(&gyroscope_noise);
+        let control = Self::build_control(&gyroscope_noise);
+        let measurement = Self::build_measurement(&accelerometer_noise, &magnetometer_noise);
 
         Self {
             filter,
@@ -267,9 +271,6 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + core::fmt::Debug,
     {
-        self.measurement
-            .measurement_noise_covariance_mut()
-            .make_scalar(self.epsilon);
         /*
         // Easy access to accelerometer noise.
         let sa11 = self.accelerometer_noise.x; // sigma_a_xx
@@ -396,6 +397,12 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + Default,
     {
+        self.control.control_matrix_mut().apply(|mat| {
+            mat.set_at(0, 0, delta_t);
+            mat.set_at(1, 1, delta_t);
+            mat.set_at(2, 2, delta_t);
+        });
+
         let rates = *angular_rates * delta_t;
         self.control.control_vector_mut().apply(|vec| {
             vec.set_row(0, rates.omega_x);
@@ -451,7 +458,7 @@ where
 
 impl<T> OwnedOrientationEstimator<T> {
     /// Builds the Kalman filter used for prediction.
-    fn build_filter() -> OwnedKalmanFilter<T>
+    fn build_filter(gyroscope_noise: &GyroscopeNoise<T>) -> OwnedKalmanFilter<T>
     where
         T: MatrixDataType + Default,
     {
@@ -484,14 +491,23 @@ impl<T> OwnedOrientationEstimator<T> {
             >(
                 [zero; { STATES * STATES }]
             ));
-        estimate_covariance.make_identity();
+        estimate_covariance.apply(|mat| {
+            mat.set_at(0, 0, gyroscope_noise.x);
+            mat.set_at(1, 1, gyroscope_noise.y);
+            mat.set_at(2, 2, gyroscope_noise.z);
+        });
 
         // Process noise matrix.
-        let process_noise = DirectProcessNoiseCovarianceMatrixMutBuffer::<STATES, T, _>::new(
+        let mut process_noise = DirectProcessNoiseCovarianceMatrixMutBuffer::<STATES, T, _>::new(
             MatrixData::new_array::<STATES, STATES, { STATES * STATES }, T>(
                 [zero; { STATES * STATES }],
             ),
         );
+        process_noise.apply(|mat| {
+            mat.set_at(0, 0, gyroscope_noise.x);
+            mat.set_at(1, 1, gyroscope_noise.y);
+            mat.set_at(2, 2, gyroscope_noise.z);
+        });
 
         // Predicted state vector.
         let mut predicted_state =
@@ -501,7 +517,7 @@ impl<T> OwnedOrientationEstimator<T> {
                 STATES,
                 T,
             >([zero; STATES]));
-        predicted_state.set_all(T::one());
+        predicted_state.set_all(T::zero());
 
         // Temporary estimate covariance matrix.
         let temp_state_matrix =
@@ -525,7 +541,7 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Builds the Kalman filter control input.
-    fn build_control() -> OwnedControlInput<T>
+    fn build_control(gyroscope_noise: &GyroscopeNoise<T>) -> OwnedControlInput<T>
     where
         T: MatrixDataType + Default,
     {
@@ -549,14 +565,23 @@ impl<T> OwnedOrientationEstimator<T> {
             >(
                 [zero; STATES * CONTROLS]
             ));
-        control_matrix.make_identity();
+        control_matrix.apply(|mat| {
+            mat.set_at(0, 0, T::one());
+            mat.set_at(1, 1, T::one());
+            mat.set_at(2, 2, T::one());
+        });
 
         // Process noise matrix.
-        let process_noise = ControlProcessNoiseCovarianceMatrixBuffer::<CONTROLS, T, _>::new(
+        let mut process_noise = ControlProcessNoiseCovarianceMatrixMutBuffer::<CONTROLS, T, _>::new(
             MatrixData::new_array::<CONTROLS, CONTROLS, { CONTROLS * CONTROLS }, T>(
                 [zero; CONTROLS * CONTROLS],
             ),
         );
+        process_noise.apply(|mat| {
+            mat.set_at(0, 0, gyroscope_noise.x);
+            mat.set_at(1, 1, gyroscope_noise.y);
+            mat.set_at(2, 2, gyroscope_noise.z);
+        });
 
         // Temporary matrix.
         let temp = TemporaryBQMatrixBuffer::<STATES, CONTROLS, T, _>::new(MatrixData::new_array::<
@@ -577,7 +602,10 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Builds the Kalman filter observation used for the prediction.
-    fn build_measurement() -> OwnedObservation<T>
+    fn build_measurement(
+        accelerometer_noise: &AccelerometerNoise<T>,
+        magnetometer_noise: &MagnetometerNoise<T>,
+    ) -> OwnedObservation<T>
     where
         T: MatrixDataType + Default,
     {
@@ -602,15 +630,37 @@ impl<T> OwnedOrientationEstimator<T> {
             >(
                 [zero; { OBSERVATIONS * STATES }],
             ));
-        observation_matrix.make_identity();
+        observation_matrix.apply(|mat| {
+            mat.set_at(0, 0, T::one());
+            mat.set_at(1, 1, T::one());
+            mat.set_at(2, 2, T::one());
+        });
 
         // Measurement noise covariance
-        let noise_covariance = MeasurementNoiseCovarianceMatrixBuffer::<OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>(
-                [zero; { OBSERVATIONS * OBSERVATIONS }],
-            ),
-        );
-        // TODO: Apply measurement noise!
+        let mut noise_covariance =
+            MeasurementNoiseCovarianceMatrixBuffer::<OBSERVATIONS, T, _>::new(
+                MatrixData::new_array::<
+                    OBSERVATIONS,
+                    OBSERVATIONS,
+                    { OBSERVATIONS * OBSERVATIONS },
+                    T,
+                >([zero; { OBSERVATIONS * OBSERVATIONS }]),
+            );
+        noise_covariance.apply(|mat| {
+            mat.set_symmetric(
+                0,
+                0,
+                accelerometer_noise.x
+                    + accelerometer_noise.z
+                    + magnetometer_noise.x
+                    + magnetometer_noise.z,
+            );
+            mat.set_symmetric(0, 1, magnetometer_noise.z);
+            mat.set_symmetric(0, 2, accelerometer_noise.y);
+
+            mat.set_at(1, 1, accelerometer_noise.z);
+            mat.set_at(2, 2, accelerometer_noise.x + accelerometer_noise.y);
+        });
 
         // Innovation vector
         let innovation_vector =
@@ -726,7 +776,7 @@ type OwnedControlInput<T> = Control<
     T,
     ControlMatrixMutBuffer<STATES, 3, T, MatrixDataArray<STATES, 3, { STATES * CONTROLS }, T>>,
     ControlVectorBuffer<CONTROLS, T, MatrixDataArray<CONTROLS, 1, CONTROLS, T>>,
-    ControlProcessNoiseCovarianceMatrixBuffer<
+    ControlProcessNoiseCovarianceMatrixMutBuffer<
         CONTROLS,
         T,
         MatrixDataArray<CONTROLS, CONTROLS, { CONTROLS * CONTROLS }, T>,
@@ -815,12 +865,14 @@ mod tests {
     fn test_state_transition_matrix() {
         let gimbal_lock_tolerance = 0.01;
         let accelerometer_noise = AccelerometerNoise::new(0.01, 0.02, 0.03);
-        let magnetometer_noise = MagnetometerNoise::new(0.04, 0.05, 0.06);
+        let gyroscope_noise = GyroscopeNoise::new(0.04, 0.05, 0.06);
+        let magnetometer_noise = MagnetometerNoise::new(0.07, 0.08, 0.09);
         let epsilon = 1e-6;
 
         let mut estimator: OwnedOrientationEstimator<f32> = OwnedOrientationEstimator::new(
             gimbal_lock_tolerance,
             accelerometer_noise,
+            gyroscope_noise,
             magnetometer_noise,
             epsilon,
         );
