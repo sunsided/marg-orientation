@@ -3,7 +3,7 @@ use crate::impl_standard_traits;
 use crate::magnetometer_reading::MagnetometerReading;
 use core::borrow::Borrow;
 use core::fmt::{Debug, Formatter};
-use core::ops::{Add, Mul, Sub};
+use core::ops::{Add, Mul, Neg, Sub};
 use minikalman::matrix::MatrixDataType;
 
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
@@ -154,6 +154,23 @@ impl<T> From<MagnetometerReading<T>> for Vector3<T> {
             x: value.x,
             y: value.y,
             z: value.z,
+        }
+    }
+}
+
+/// Implements the unary negation.
+impl<T> Neg for Vector3<T>
+where
+    T: Neg<Output = T>,
+{
+    type Output = Vector3<T>;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
         }
     }
 }

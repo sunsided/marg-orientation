@@ -476,24 +476,26 @@ impl<T> OwnedOrientationEstimator<T> {
             + DetectGimbalLock<T>
             + NormalizeAngle<T, Output = T>,
     {
-        // Calculate TRIAD vectors.
-        let b1 = a;
-        let b2 = (m - a * (m * a)).normalized();
-        let b3 = b2.cross(b1);
+        // Define base vectors (i.e., TRIAD).
+        let z = -a; // up
+        let x = m; // forward
+        let y = m.cross(z).normalized(); // left
+        let x = y.cross(z).normalized(); // forward
 
         // TRIAD rotation matrix: [b1, b2, b3], stacked columns
 
-        // Derive Euler angles from TRIAD rotation matrix (ZYX sequence).
-        let theta = (-ArcSin::arcsin(b1.z)).normalize_angle(); // pitch
+        // Derive Euler angles from TRIAD rotation matrix (Trait-Bryan XYZ order).
+        let theta = (-ArcSin::arcsin(z.x)).normalize_angle(); // pitch
 
         // Handle Gimbal lock situations.
         if theta.close_to_zenith_or_nadir(self.gimbal_lock_tolerance) {
-            let psi = ArcTan::atan2(-b3.y, b2.y); // yaw
+            todo!("test this");
+            let psi = ArcTan::atan2(-x.y, y.y); // yaw
             let phi = T::zero(); // roll
             EulerAngles::new(phi.normalize_angle(), theta, psi.normalize_angle())
         } else {
-            let psi = ArcTan::atan2(b1.y, b1.x); // yaw
-            let phi = ArcTan::atan2(b2.z, b3.z); // roll
+            let phi = ArcTan::atan2(z.y, z.z); // roll
+            let psi = ArcTan::atan2(y.x, x.x); // yaw
             EulerAngles::new(phi.normalize_angle(), theta, psi.normalize_angle())
         }
     }

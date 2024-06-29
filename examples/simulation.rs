@@ -76,13 +76,14 @@ impl From<&MPU6050> for AccelerometerReading<f32> {
 
 impl From<&MPU6050> for GyroscopeReading<f32> {
     fn from(value: &MPU6050) -> Self {
-        GyroscopeReading::new(value.gyro_z, -value.gyro_y, -value.gyro_x)
+        GyroscopeReading::new(value.gyro_x, value.gyro_y, value.gyro_z)
     }
 }
 
 impl From<&HMC5833L> for MagnetometerReading<f32> {
     fn from(value: &HMC5833L) -> Self {
-        MagnetometerReading::new(value.compass_x, value.compass_y, value.compass_z)
+        MagnetometerReading::new(value.compass_z, value.compass_y, value.compass_x)
+        // TODO: Fix this!
     }
 }
 
@@ -276,6 +277,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 0.0, 0.0));
         window.draw_line(&Point3::default(), &filter_y, &Point3::new(0.0, 1.0, 0.0));
         window.draw_line(&Point3::default(), &filter_z, &Point3::new(0.0, 0.0, 1.0));
+
+        // Display raw accelerometer orientation.
+        window.draw_line(
+            &Point3::default(),
+            &Point3::new(mpu6050_meas.acc_x, mpu6050_meas.acc_y, mpu6050_meas.acc_z),
+            &Point3::new(0.5, 0.0, 1.0),
+        );
 
         // Display simulation indexes.
         let info = format!(
