@@ -5,9 +5,10 @@ use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
 use kiss3d::text::Font;
 use kiss3d::window::Window;
+use marg_orientation::test_estimator::OwnedOrientationEstimator;
 use marg_orientation::{
     AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
-    MagnetometerNoise, MagnetometerReading, OwnedOrientationEstimator,
+    MagnetometerNoise, MagnetometerReading,
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
