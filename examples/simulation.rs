@@ -1,11 +1,6 @@
+use coordinate_frame::{EastNorthUp, NorthWestDown, SouthEastUp};
 use csv::ReaderBuilder;
 use kiss3d::camera::FirstPerson;
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use std::error::Error;
-use std::path::Path;
-use std::time::{Duration, Instant};
-
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
 use kiss3d::text::Font;
@@ -14,99 +9,233 @@ use marg_orientation::{
     AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
     MagnetometerNoise, MagnetometerReading, OwnedOrientationEstimator,
 };
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use std::error::Error;
+use std::ops::Deref;
+use std::path::Path;
+use std::time::{Duration, Instant};
 
-/// MPU6050 accelerometer and gyroscope readings.
-///
-/// The deserialization ignores the temperature readings.
+/// LSM303DLHC accelerometer readings.
 #[derive(Debug, Deserialize)]
-struct MPU6050 {
-    /// The sample time, in seconds, relative to the beginning of the recording.
-    #[serde(rename = "sec")]
-    time: f32,
+struct LSM303DLHCAccelerometer {
+    /// The sample time, in seconds, relative to the Unix epoch.
+    #[serde(rename = "host_time")]
+    time: f64,
     /// Accelerometer reading on the x-axis.
+    #[serde(rename = "x")]
     acc_x: f32,
     /// Accelerometer reading on the y-axis.
+    #[serde(rename = "y")]
     acc_y: f32,
     /// Accelerometer reading on the z-axis.
+    #[serde(rename = "z")]
     acc_z: f32,
+}
+
+/// L3GD20 gyroscope readings.
+#[derive(Debug, Deserialize)]
+struct L3GD20Gyro {
+    /// The sample time, in seconds, relative to the Unix epoch.
+    #[serde(rename = "host_time")]
+    time: f64,
     /// Gyroscope reading on the x-axis.
+    #[serde(rename = "x")]
     gyro_x: f32,
     /// Gyroscope reading on the y-axis.
+    #[serde(rename = "y")]
     gyro_y: f32,
     /// Gyroscope reading on the z-axis.
+    #[serde(rename = "z")]
     gyro_z: f32,
 }
 
-/// HMC5833L magnetometer readings.
+/// LSM303DLHC magnetometer readings.
 #[derive(Debug, Deserialize)]
-struct HMC5833L {
-    /// The sample time, in seconds, relative to the beginning of the recording.
-    #[serde(rename = "sec")]
-    time: f32,
+struct LSM303DLHCMagnetometer {
+    /// The sample time, in seconds, relative to the Unix epoch.
+    #[serde(rename = "host_time")]
+    time: f64,
     /// Magnetometer reading on the x-axis.
+    #[serde(rename = "x")]
     compass_x: f32,
     /// Magnetometer reading on the y-axis.
+    #[serde(rename = "y")]
     compass_y: f32,
     /// Magnetometer reading on the z-axis.
+    #[serde(rename = "z")]
     compass_z: f32,
 }
 
 pub trait Time {
     /// Gets the sample time.
-    fn time(&self) -> f32;
+    fn time(&self) -> f64;
 }
 
-impl Time for MPU6050 {
-    fn time(&self) -> f32 {
+impl Time for L3GD20Gyro {
+    fn time(&self) -> f64 {
         self.time
     }
 }
 
-impl Time for HMC5833L {
-    fn time(&self) -> f32 {
+impl Time for LSM303DLHCAccelerometer {
+    fn time(&self) -> f64 {
         self.time
     }
 }
 
-impl From<&MPU6050> for AccelerometerReading<f32> {
-    fn from(value: &MPU6050) -> Self {
-        AccelerometerReading::new(value.acc_x, value.acc_y, value.acc_z)
+impl Time for LSM303DLHCMagnetometer {
+    fn time(&self) -> f64 {
+        self.time
     }
 }
 
-impl From<&MPU6050> for GyroscopeReading<f32> {
-    fn from(value: &MPU6050) -> Self {
-        GyroscopeReading::new(value.gyro_x, value.gyro_y, value.gyro_z)
+impl From<&LSM303DLHCAccelerometer> for AccelerometerReading<f32> {
+    fn from(value: &LSM303DLHCAccelerometer) -> Self {
+        // The HMC303DLHC's accelerometer on the STM32F3 Discovery board measures North, West, Down.
+        let frame = NorthWestDown::new(value.acc_x, value.acc_y, value.acc_z);
+        // Normalize by the sensor value range.
+        let frame = frame / 16384.0;
+        AccelerometerReading::from_ned(frame)
     }
 }
 
-impl From<&HMC5833L> for MagnetometerReading<f32> {
-    fn from(value: &HMC5833L) -> Self {
-        MagnetometerReading::new(value.compass_z, value.compass_y, value.compass_x)
-        // TODO: Fix this!
+impl From<LSM303DLHCAccelerometer> for AccelerometerReading<f32> {
+    fn from(value: LSM303DLHCAccelerometer) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&LSM303DLHCMagnetometer> for MagnetometerReading<f32> {
+    fn from(value: &LSM303DLHCMagnetometer) -> Self {
+        // The HMC303DLHC's magnetometer on the STM32F3 Discovery board measures South, East, Up.
+        let frame = SouthEastUp::new(value.compass_x, value.compass_y, value.compass_z);
+        // Normalize by the sensor value range.
+        let frame = frame / 1100.0;
+        MagnetometerReading::from_ned(frame)
+    }
+}
+
+impl From<LSM303DLHCMagnetometer> for MagnetometerReading<f32> {
+    fn from(value: LSM303DLHCMagnetometer) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&L3GD20Gyro> for GyroscopeReading<f32> {
+    fn from(value: &L3GD20Gyro) -> Self {
+        // The L3GD20 gyroscope on the STM32F3 Discovery board measures East, North, Up.
+        let frame = EastNorthUp::new(value.gyro_x, value.gyro_y, value.gyro_z);
+        // Normalize by the sensor value range.
+        let frame = frame / 5.714285;
+        GyroscopeReading::from_ned(frame)
+    }
+}
+
+impl From<L3GD20Gyro> for GyroscopeReading<f32> {
+    fn from(value: L3GD20Gyro) -> Self {
+        Self::from(&value)
+    }
+}
+
+/// A timed reading.
+pub struct Timed<R> {
+    pub time: f64,
+    pub reading: R,
+}
+
+impl<T> Timed<T> {
+    pub fn with_time_offset(mut self, value: f64) -> Self {
+        self.time -= value;
+        self
+    }
+}
+
+impl<R> Time for Timed<R> {
+    fn time(&self) -> f64 {
+        self.time
+    }
+}
+
+impl From<LSM303DLHCAccelerometer> for Timed<AccelerometerReading<f32>> {
+    fn from(value: LSM303DLHCAccelerometer) -> Self {
+        Self {
+            time: value.time,
+            reading: value.into(),
+        }
+    }
+}
+
+impl From<LSM303DLHCMagnetometer> for Timed<MagnetometerReading<f32>> {
+    fn from(value: LSM303DLHCMagnetometer) -> Self {
+        Self {
+            time: value.time,
+            reading: value.into(),
+        }
+    }
+}
+
+impl From<L3GD20Gyro> for Timed<GyroscopeReading<f32>> {
+    fn from(value: L3GD20Gyro) -> Self {
+        Self {
+            time: value.time,
+            reading: value.into(),
+        }
+    }
+}
+
+impl<R> Deref for Timed<R> {
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.reading
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let dataset = "set-2/unmoved-with-x-pointing-forward";
+    let dataset = "serial-sensors/2024-07-06/stm32f3discovery";
 
-    let mpu6050 = read_csv::<MPU6050>(
-        format!("tests/data/sensor-fusion/data/{dataset}/mpu6050.csv").as_str(),
+    let gyro =
+        read_csv::<L3GD20Gyro>(format!("tests/data/{dataset}/106-gyro-i16-x1.csv").as_str())?;
+    let compass = read_csv::<LSM303DLHCMagnetometer>(
+        format!("tests/data/{dataset}/30-mag-i16-x3.csv").as_str(),
     )?;
-    let hmc5833l = read_csv::<HMC5833L>(
-        format!("tests/data/sensor-fusion/data/{dataset}/hmc5833l.csv").as_str(),
+    let accel = read_csv::<LSM303DLHCAccelerometer>(
+        format!("tests/data/{dataset}/25-acc-i16-x3.csv").as_str(),
     )?;
 
-    // println!("{:#?}", mpu6050[0]);
-    // println!("{:#?}", hmc5833l[0]);
+    // Obtain the offset times.
+    let gyro_t = gyro[0].time;
+    let accel_t = accel[0].time;
+    let compass_t = compass[0].time;
+    let time_offset = gyro_t.min(accel_t).min(compass_t);
+
+    // Convert the readings into normalized frames.
+    let gyro: Vec<Timed<GyroscopeReading<f32>>> = gyro
+        .into_iter()
+        .map(Timed::from)
+        .map(|t| t.with_time_offset(time_offset))
+        .collect();
+    let compass: Vec<Timed<MagnetometerReading<f32>>> = compass
+        .into_iter()
+        .map(Timed::from)
+        .map(|t| t.with_time_offset(time_offset))
+        .collect();
+    let accel: Vec<Timed<AccelerometerReading<f32>>> = accel
+        .into_iter()
+        .map(Timed::from)
+        .map(|t| t.with_time_offset(time_offset))
+        .collect();
 
     // Determine sample rates.
-    let (mpu6050_sample_rate, _) = determine_sampling(&mpu6050);
-    let (hmc8533l_sample_rate, _) = determine_sampling(&hmc5833l);
+    let (gyro_sample_rate, _) = determine_sampling(&gyro);
+    let (accel_sample_rate, _) = determine_sampling(&accel);
+    let (compass_sample_rate, _) = determine_sampling(&compass);
 
     println!("Average sample rates:");
-    println!("- MPU6050 readings:  {mpu6050_sample_rate} Hz (expected 100 Hz)");
-    println!("- HMC8533L readings: {hmc8533l_sample_rate} Hz (expected 75 Hz)");
+    println!("- Accelerometer readings:  {accel_sample_rate} Hz (expected 400 Hz)");
+    println!("- Magnetometer readings:  {compass_sample_rate} Hz (expected 75 Hz)");
+    println!("- Gyroscope readings: {gyro_sample_rate} Hz (expected 400 Hz)");
 
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
@@ -141,8 +270,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     camera.set_up_axis(Vector3::new(0.0, 0.0, 1.0));
 
     // Walk through the simulation data.
-    let mut mpu6050_index = 0;
-    let mut hmc8583l_index = 0;
+    let mut accel_index = 0;
+    let mut compass_index = 0;
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
@@ -157,33 +286,40 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut should_update = false;
 
         // Increment simulation index.
-        while mpu6050[mpu6050_index].time < simulation_time.as_secs_f32() {
-            mpu6050_index += 1;
+        while accel[accel_index].time < simulation_time.as_secs_f64() {
+            accel_index += 1;
             should_update = true;
-            if mpu6050_index >= mpu6050.len() {
-                mpu6050_index = 0;
-                hmc8583l_index = 0;
+            if accel_index >= gyro.len() {
+                accel_index = 0;
+                compass_index = 0;
                 simulation_time = Duration::default();
             }
         }
-        while hmc5833l[hmc8583l_index].time < simulation_time.as_secs_f32() {
-            hmc8583l_index += 1;
+        while gyro[accel_index].time < simulation_time.as_secs_f64() {
+            accel_index += 1;
             should_update = true;
-            if hmc8583l_index >= hmc5833l.len() {
-                mpu6050_index = 0;
-                hmc8583l_index = 0;
+            if accel_index >= gyro.len() {
+                accel_index = 0;
+                compass_index = 0;
+                simulation_time = Duration::default();
+            }
+        }
+        while compass[compass_index].time < simulation_time.as_secs_f64() {
+            compass_index += 1;
+            should_update = true;
+            if compass_index >= compass.len() {
+                accel_index = 0;
+                compass_index = 0;
                 simulation_time = Duration::default();
             }
         }
 
-        let mpu6050_meas = &mpu6050[mpu6050_index];
-        let hmc5833l_meas = &hmc5833l[hmc8583l_index];
+        let accel_meas = &accel[accel_index];
+        let gyro_meas = &gyro[accel_index];
+        let compass_meas = &compass[compass_index];
 
         // Run a prediction.
-        estimator.predict(
-            elapsed_time.as_secs_f32(),
-            &GyroscopeReading::from(mpu6050_meas),
-        );
+        estimator.predict(elapsed_time.as_secs_f32(), &gyro_meas.reading);
 
         let estimated_angles = estimator.estimated_angles();
         if estimated_angles.yaw_psi.is_nan()
@@ -195,8 +331,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Update the filter when needed.
         if should_update {
-            let accelerometer = AccelerometerReading::from(mpu6050_meas);
-            let magnetometer = MagnetometerReading::from(hmc5833l_meas);
+            let accelerometer = accel_meas.reading;
+            let magnetometer = compass_meas.reading;
             estimator.correct(&accelerometer, &magnetometer);
         }
 
@@ -217,7 +353,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         let filter_x = Point3::from((rotation * Vector3::new(1.0, 0.0, 0.0)).normalize());
         let filter_y = Point3::from((rotation * Vector3::new(0.0, 1.0, 0.0)).normalize());
-        let filter_z = Point3::from((rotation * Vector3::new(0.0, 0.0, 1.0)).normalize());
+        let filter_z = Point3::from((rotation * Vector3::new(0.0, 0.0, -1.0)).normalize());
 
         // Display elapsed time since last frame.
         let info = format!(
@@ -244,10 +380,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display simulation indexes.
-        let info = format!(
-            "tm = {:.2} s (#{})",
-            mpu6050[mpu6050_index].time, mpu6050_index
-        );
+        let info = format!("tm = {:.2} s (#{})", gyro[accel_index].time, accel_index);
         window.draw_text(
             &info,
             &Point2::new(0.0, 64.0),
@@ -269,26 +402,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         window.draw_line(
             &Point3::default(),
-            &Point3::new(0.0, 0.0, 1.0),
-            &Point3::new(0.0, 0.0, 1.0),
+            &Point3::new(0.0, 0.0, -1.0),
+            &Point3::new(0.0, 0.0, -1.0),
         );
 
         // Display estimated orientation.
-        window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 0.0, 0.0));
-        window.draw_line(&Point3::default(), &filter_y, &Point3::new(0.0, 1.0, 0.0));
-        window.draw_line(&Point3::default(), &filter_z, &Point3::new(0.0, 0.0, 1.0));
+        window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 0.0, -0.0));
+        window.draw_line(&Point3::default(), &filter_y, &Point3::new(0.0, 1.0, -0.0));
+        window.draw_line(&Point3::default(), &filter_z, &Point3::new(0.0, 0.0, -1.0));
 
         // Display raw accelerometer orientation.
         window.draw_line(
             &Point3::default(),
-            &Point3::new(mpu6050_meas.acc_x, mpu6050_meas.acc_y, mpu6050_meas.acc_z),
+            &Point3::new(accel_meas.x, accel_meas.y, -accel_meas.z),
             &Point3::new(0.5, 0.0, 1.0),
         );
 
         // Display simulation indexes.
         let info = format!(
             "th = {:.2} s (#{})",
-            hmc5833l[hmc8583l_index].time, hmc8583l_index
+            compass[compass_index].time, compass_index
         );
         window.draw_text(
             &info,
@@ -299,7 +432,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display magnetometer.
-        let info = format!("Bx = {:+0.02} Gs", hmc5833l_meas.compass_x);
+        let info = format!("Bx = {:+0.02} Gs", compass_meas.x);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 15.0),
@@ -309,7 +442,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display magnetometer.
-        let info = format!("By = {:+0.02} Gs", hmc5833l_meas.compass_y);
+        let info = format!("By = {:+0.02} Gs", compass_meas.y);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 14.0),
@@ -319,7 +452,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display magnetometer.
-        let info = format!("Bz = {:+0.02} Gs", hmc5833l_meas.compass_z);
+        let info = format!("Bz = {:+0.02} Gs", compass_meas.z);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 13.0),
@@ -329,7 +462,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display acceleration.
-        let info = format!("ax = {:+0.02} G", mpu6050_meas.acc_x);
+        let info = format!("ax = {:+0.02} G", accel_meas.x);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 11.0),
@@ -339,7 +472,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display acceleration.
-        let info = format!("ay = {:+0.02} G", mpu6050_meas.acc_y);
+        let info = format!("ay = {:+0.02} G", accel_meas.y);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 10.0),
@@ -349,7 +482,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display acceleration.
-        let info = format!("az = {:+0.02} G", mpu6050_meas.acc_z);
+        let info = format!("az = {:+0.02} G", accel_meas.z);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 9.0),
@@ -361,8 +494,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Display gyro roll rates.
         let info = format!(
             "ωx = {:+0.02} rad/s ({:+0.02}°/s)",
-            mpu6050_meas.gyro_x,
-            mpu6050_meas.gyro_x * 180.0 / std::f32::consts::PI
+            gyro_meas.omega_x,
+            gyro_meas.omega_x * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
             &info,
@@ -375,8 +508,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Display gyro roll rates.
         let info = format!(
             "ωy = {:+0.02} rad/s ({:+0.02}°/s)",
-            mpu6050_meas.gyro_y,
-            mpu6050_meas.gyro_y * 180.0 / std::f32::consts::PI
+            gyro_meas.omega_y,
+            gyro_meas.omega_y * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
             &info,
@@ -389,8 +522,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Display gyro roll rates.
         let info = format!(
             "ωz = {:+0.02} rad/s ({:+0.02}°/s)",
-            mpu6050_meas.gyro_z,
-            mpu6050_meas.gyro_z * 180.0 / std::f32::consts::PI
+            gyro_meas.omega_z,
+            gyro_meas.omega_z * 180.0 / std::f32::consts::PI
         );
         window.draw_text(
             &info,
@@ -450,28 +583,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display the accelerometer reading.
         let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(mpu6050_meas.acc_x, mpu6050_meas.acc_y, mpu6050_meas.acc_z);
+        let p2 = Point3::new(accel_meas.x, accel_meas.y, accel_meas.z);
         window.draw_line(&p1, &p2, &Point3::new(1.0, 1.0, 0.0));
 
         // Display the compass reading.
         let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(
-            hmc5833l_meas.compass_x,
-            hmc5833l_meas.compass_y,
-            hmc5833l_meas.compass_z,
-        );
+        let p2 = Point3::new(compass_meas.x, compass_meas.y, compass_meas.z);
         window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 1.0));
     }
 
     Ok(())
 }
 
-fn determine_sampling<T: Time>(data: &[T]) -> (f32, f32) {
+fn determine_sampling<T: Time>(data: &[T]) -> (f64, f64) {
     let (total_diff, count) = data.windows(2).fold((0.0, 0), |(sum, cnt), window| {
         let diff = window[1].time() - window[0].time();
         (sum + diff, cnt + 1)
     });
-    let sample_time = total_diff / (count as f32);
+    let sample_time = total_diff / (count as f64);
     let sample_rate = 1.0 / sample_time;
     (sample_rate, sample_time)
 }

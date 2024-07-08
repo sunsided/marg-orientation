@@ -1,4 +1,4 @@
-use crate::impl_standard_traits;
+use crate::{impl_standard_traits, AccelerometerReading};
 use core::fmt::{Debug, Formatter};
 use core::ops::Mul;
 
@@ -18,6 +18,22 @@ impl<T> MagnetometerReading<T> {
     #[inline(always)]
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
+    }
+
+    /// Constructs a new [`MagnetometerReading`] instance from a reading in a given coordinate frame.
+    #[cfg(feature = "coordinate-frame")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+    pub fn from_ned<C>(coordinate: C) -> Self
+    where
+        C: Into<coordinate_frame::NorthEastDown<T>>,
+        T: Clone,
+    {
+        let coordinate = coordinate.into();
+        Self {
+            x: coordinate.x(),
+            y: coordinate.y(),
+            z: coordinate.z(),
+        }
     }
 
     /// Returns the length of the [`MagnetometerReading`] vector.
@@ -75,6 +91,18 @@ where
             y: self.y * rhs.clone(),
             z: self.z * rhs.clone(),
         }
+    }
+}
+
+#[cfg(feature = "coordinate-frame")]
+#[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+impl<T, C> From<C> for MagnetometerReading<T>
+where
+    C: coordinate_frame::CoordinateFrame<Type = T>,
+    T: Copy + coordinate_frame::SaturatingNeg<Output = T>,
+{
+    fn from(value: C) -> Self {
+        Self::from_ned(value.to_ned())
     }
 }
 

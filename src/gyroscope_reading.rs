@@ -1,4 +1,4 @@
-use crate::impl_standard_traits;
+use crate::{impl_standard_traits, MagnetometerReading};
 use core::fmt::{Debug, Formatter};
 use core::ops::{Mul, Sub};
 
@@ -21,6 +21,22 @@ impl<T> GyroscopeReading<T> {
             omega_x,
             omega_y,
             omega_z,
+        }
+    }
+
+    /// Constructs a new [`GyroscopeReading`] instance from a reading in a given coordinate frame.
+    #[cfg(feature = "coordinate-frame")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+    pub fn from_ned<C>(coordinate: C) -> Self
+    where
+        C: Into<coordinate_frame::NorthEastDown<T>>,
+        T: Clone,
+    {
+        let coordinate = coordinate.into();
+        Self {
+            omega_x: coordinate.x(),
+            omega_y: coordinate.y(),
+            omega_z: coordinate.z(),
         }
     }
 
@@ -95,6 +111,18 @@ where
             omega_y: self.omega_y - rhs.clone(),
             omega_z: self.omega_z - rhs.clone(),
         }
+    }
+}
+
+#[cfg(feature = "coordinate-frame")]
+#[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+impl<T, C> From<C> for GyroscopeReading<T>
+where
+    C: coordinate_frame::CoordinateFrame<Type = T>,
+    T: Copy + coordinate_frame::SaturatingNeg<Output = T>,
+{
+    fn from(value: C) -> Self {
+        Self::from_ned(value.to_ned())
     }
 }
 

@@ -1,3 +1,0 @@
-[submodule "tests/data/sensor-fusion"]
-	path = tests/data/sensor-fusion
-	url = git@github.com:sunsided/sensor-fusion.git
