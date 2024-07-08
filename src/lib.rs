@@ -30,3 +30,12 @@ pub use crate::magnetometer_noise::MagnetometerNoise;
 pub use crate::magnetometer_reading::MagnetometerReading;
 
 pub use crate::num_traits::*;
+
+/// Calculates the square of the `value`.
+#[inline]
+fn sq<T>(value: T) -> T
+where
+    T: core::ops::Mul<T, Output = T> + Copy,
+{
+    value * value
+}

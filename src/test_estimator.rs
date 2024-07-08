@@ -477,15 +477,6 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 }
 
-/// Calculates the square of the `value`.
-#[inline]
-fn sq<T>(value: T) -> T
-where
-    T: core::ops::Mul<T, Output = T> + Copy,
-{
-    value * value
-}
-
 impl<T> OwnedOrientationEstimator<T> {
     /// Builds the Kalman filter used for prediction.
     fn build_filter(
