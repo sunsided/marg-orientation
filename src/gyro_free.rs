@@ -28,7 +28,7 @@ pub struct OwnedOrientationEstimator<T> {
     /// The autocovariances of the noise terms.
     magnetometer_noise: MagnetometerNoise<T>,
     /// Magnetic field reference vector for the current location.
-    magnetic_field_ref: MagneticReference<T>,
+    magnetic_field_ref: Vector3<T>,
     /// A bias term to avoid divisions by zero.
     epsilon: T,
 }
@@ -53,10 +53,15 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType + Default,
     {
         let filter = Self::build_filter(process_noise);
-        let mag_measurement =
-            Self::build_mag_measurement(&accelerometer_noise, &magnetometer_noise);
-        let acc_measurement =
-            Self::build_accel_measurement(&accelerometer_noise, &magnetometer_noise);
+        let mag_measurement = Self::build_mag_measurement(&magnetometer_noise);
+        let acc_measurement = Self::build_accel_measurement(&accelerometer_noise);
+
+        let magnetic_field_ref = Vector3::new(
+            magnetic_field_ref.x,
+            magnetic_field_ref.y,
+            magnetic_field_ref.z,
+        )
+        .normalized();
 
         Self {
             filter,
@@ -153,7 +158,11 @@ impl<T> OwnedOrientationEstimator<T> {
         let one = T::one();
         let two = one + one;
         let (q0, q1, q2, q3) = self.estimated_quaternion();
-        let (mx, my, mz) = self.magnetic_field_ref.as_tuple();
+        let (mx, my, mz) = (
+            self.magnetic_field_ref.x,
+            self.magnetic_field_ref.y,
+            self.magnetic_field_ref.z,
+        );
         self.mag_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
@@ -176,8 +185,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // Perform the update step.
         self.filter
             .correct_nonlinear(&mut self.mag_measurement, |state, measurement| {
-                let reference = Vector3::from(self.magnetic_field_ref);
-                let rotated = Self::rotate_vector(state, &reference);
+                let rotated = Self::rotate_vector(state, &self.magnetic_field_ref);
                 measurement.set_row(0, rotated.x);
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
@@ -467,7 +475,6 @@ impl<T> OwnedOrientationEstimator<T> {
 
     /// Builds the Kalman filter observation used for the prediction.
     fn build_mag_measurement(
-        accelerometer_noise: &AccelerometerNoise<T>,
         magnetometer_noise: &MagnetometerNoise<T>,
     ) -> OwnedVector3Observation<T>
     where
@@ -493,11 +500,7 @@ impl<T> OwnedOrientationEstimator<T> {
                     [zero; { MAG_OBSERVATIONS * STATES }],
                 ),
             );
-        observation_matrix.apply(|mat| {
-            mat.set_at(0, 0, T::one());
-            mat.set_at(1, 1, T::one());
-            mat.set_at(2, 2, T::one());
-        });
+        observation_matrix.set_all(T::zero());
 
         // Measurement noise covariance
         let mut noise_covariance =
@@ -599,7 +602,6 @@ impl<T> OwnedOrientationEstimator<T> {
     /// Builds the Kalman filter observation used for the prediction.
     fn build_accel_measurement(
         accelerometer_noise: &AccelerometerNoise<T>,
-        magnetometer_noise: &MagnetometerNoise<T>,
     ) -> OwnedVector3Observation<T>
     where
         T: MatrixDataType + Default,
@@ -627,11 +629,7 @@ impl<T> OwnedOrientationEstimator<T> {
                     T,
                 >([zero; { ACCEL_OBSERVATIONS * STATES }]),
             );
-        observation_matrix.apply(|mat| {
-            mat.set_at(0, 0, T::one());
-            mat.set_at(1, 1, T::one());
-            mat.set_at(2, 2, T::one());
-        });
+        observation_matrix.set_all(T::zero());
 
         // Measurement noise covariance
         let mut noise_covariance =

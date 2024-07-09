@@ -7,8 +7,8 @@ use kiss3d::text::Font;
 use kiss3d::window::Window;
 use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
 use marg_orientation::{
-    AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
-    MagnetometerNoise, MagnetometerReading,
+    AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
+    MagnetometerReading,
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -296,7 +296,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Enable updates when we receive new data.
         let mut acc_should_update = false;
         let mut mag_should_update = false;
-        let mut gyro_should_update = false;
+        let mut _gyro_should_update = false;
 
         // Increment simulation index.
         while accel[accel_index].time < simulation_time.as_secs_f64() {
@@ -311,7 +311,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         while gyro[gyro_index].time < simulation_time.as_secs_f64() {
             gyro_index += 1;
-            gyro_should_update = true;
+            _gyro_should_update = true;
             if accel_index >= gyro.len() {
                 accel_index = 0;
                 gyro_index = 0;
@@ -438,12 +438,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Display the accelerometer reading.
         let p1 = Point3::new(0.0, 0.0, 0.0);
         let p2 = Point3::new(am.x(), am.y(), am.z());
-        // window.draw_line(&p1, &p2, &Point3::new(0.5, 0.0, 1.0));
+        window.draw_line(&p1, &p2, &Point3::new(0.5, 0.0, 1.0));
 
         // Display the compass reading.
         let p1 = Point3::new(0.0, 0.0, 0.0);
         let p2 = Point3::new(mm.x(), mm.y(), mm.z());
-        // window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.5));
+        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.5));
 
         // Display simulation indexes.
         let info = format!(
