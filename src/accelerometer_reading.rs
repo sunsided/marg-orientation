@@ -23,7 +23,7 @@ impl<T> AccelerometerReading<T> {
     /// Constructs a new [`AccelerometerReading`] instance from a reading in a given coordinate frame.
     #[cfg(feature = "coordinate-frame")]
     #[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
-    pub fn from_ned<C>(coordinate: C) -> Self
+    pub fn north_east_down<C>(coordinate: C) -> Self
     where
         C: Into<coordinate_frame::NorthEastDown<T>>,
         T: Clone,
@@ -102,7 +102,7 @@ where
     T: Copy + coordinate_frame::SaturatingNeg<Output = T>,
 {
     fn from(value: C) -> Self {
-        Self::from_ned(value.to_ned())
+        Self::north_east_down(value.to_ned())
     }
 }
 

@@ -3,15 +3,18 @@ mod types;
 use crate::gyro_free::types::*;
 use crate::vector3::Vector3;
 use crate::{
-    AccelerometerNoise, AccelerometerReading, IsNaN, MagnetometerNoise, MagnetometerReading,
-    NormalizeAngle,
+    Abs, AccelerometerNoise, AccelerometerReading, ArcSin, ArcTan, EulerAngles, IsNaN,
+    MagnetometerNoise, MagnetometerReading, NormalizeAngle,
 };
-use coordinate_frame::ZeroOne;
+use core::ops::{Add, Mul, Sub};
 use minikalman::buffers::types::*;
 use minikalman::extended::{ExtendedKalmanBuilder, ExtendedObservationBuilder};
 use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
-use num_traits::One;
+use num_traits::{One, Zero};
+
+/// A magnetic field reference vector.
+pub type MagneticReference<T> = MagnetometerReading<T>;
 
 /// A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator with generic type `T`.
 pub struct OwnedOrientationEstimator<T> {
@@ -25,7 +28,7 @@ pub struct OwnedOrientationEstimator<T> {
     /// The autocovariances of the noise terms.
     magnetometer_noise: MagnetometerNoise<T>,
     /// Magnetic field reference vector for the current location.
-    magnetic_field_ref: MagnetometerReading<T>,
+    magnetic_field_ref: MagneticReference<T>,
     /// A bias term to avoid divisions by zero.
     epsilon: T,
 }
@@ -37,17 +40,19 @@ impl<T> OwnedOrientationEstimator<T> {
     /// * `accelerometer_noise` - The accelerometer noise values (sigma-squared) for each axis.
     /// * `magnetometer_noise` - The magnetometer noise values (sigma-squared) for each axis.
     /// * `magnetic_field_ref` - The magnetic field reference vector for the current location.
+    /// * `process_noise` - A process noise value.
     /// * `epsilon` - A small bias term to avoid divisions by zero. Set to e.g. `1e-6`.
     pub fn new(
         accelerometer_noise: AccelerometerNoise<T>,
         magnetometer_noise: MagnetometerNoise<T>,
-        magnetic_field_ref: MagnetometerReading<T>,
+        magnetic_field_ref: MagneticReference<T>,
+        process_noise: T,
         epsilon: T,
     ) -> Self
     where
         T: MatrixDataType + Default,
     {
-        let filter = Self::build_filter(epsilon);
+        let filter = Self::build_filter(process_noise);
         let mag_measurement =
             Self::build_mag_measurement(&accelerometer_noise, &magnetometer_noise);
         let acc_measurement =
@@ -93,7 +98,26 @@ impl<T> OwnedOrientationEstimator<T> {
             vec.set_row(2, a.z);
         });
 
-        // TODO: Set Jacobian!
+        // Update the Jacobian.
+        let (q0, q1, q2, q3) = self.estimated_quaternion();
+        self.acc_measurement
+            .observation_jacobian_matrix_mut()
+            .apply(|mat| {
+                mat.set_at(0, 0, q2);
+                mat.set_at(0, 1, -q3);
+                mat.set_at(0, 2, q0);
+                mat.set_at(0, 3, -q1);
+
+                mat.set_at(1, 0, -q1);
+                mat.set_at(1, 1, -q0);
+                mat.set_at(1, 2, q3);
+                mat.set_at(1, 3, q2);
+
+                mat.set_at(2, 0, q0);
+                mat.set_at(2, 1, -q1);
+                mat.set_at(2, 2, -q2);
+                mat.set_at(2, 3, q3);
+            });
 
         // Perform the update step.
         self.filter
@@ -104,6 +128,8 @@ impl<T> OwnedOrientationEstimator<T> {
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
             });
+
+        self.normalize_state_quaternion();
         self.panic_if_nan();
     }
 
@@ -123,7 +149,29 @@ impl<T> OwnedOrientationEstimator<T> {
             vec.set_row(2, m.z);
         });
 
-        // TODO: Set Jacobian!
+        // Update the Jacobian.
+        let one = T::one();
+        let two = one + one;
+        let (q0, q1, q2, q3) = self.estimated_quaternion();
+        let (mx, my, mz) = self.magnetic_field_ref.as_tuple();
+        self.mag_measurement
+            .observation_jacobian_matrix_mut()
+            .apply(|mat| {
+                mat.set_at(0, 0, two * (mz * q2 - my * q3));
+                mat.set_at(0, 1, two * (mz * q3 + my * q2));
+                mat.set_at(0, 2, two * (mz * q0 + my * q1));
+                mat.set_at(0, 3, two * (mz * q1 - my * q0));
+
+                mat.set_at(1, 0, two * (mx * q3 - mz * q1));
+                mat.set_at(1, 1, two * (mx * q2 + mz * q0));
+                mat.set_at(1, 2, two * (mx * q1 - mz * q3));
+                mat.set_at(1, 3, two * (mx * q0 + mz * q2));
+
+                mat.set_at(2, 0, two * (my * q1 - mx * q2));
+                mat.set_at(2, 1, two * (my * q0 - mx * q3));
+                mat.set_at(2, 2, two * (my * q3 + mx * q0));
+                mat.set_at(2, 3, two * (my * q2 + mx * q1));
+            });
 
         // Perform the update step.
         self.filter
@@ -134,16 +182,14 @@ impl<T> OwnedOrientationEstimator<T> {
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
             });
+
+        self.normalize_state_quaternion();
         self.panic_if_nan();
     }
 
     fn rotate_vector(state: &StateVectorBufferOwnedType<STATES, T>, vec: &Vector3<T>) -> Vector3<T>
     where
-        T: Copy
-            + One<Output = T>
-            + core::ops::Add<T, Output = T>
-            + core::ops::Mul<T, Output = T>
-            + core::ops::Sub<T, Output = T>,
+        T: Copy + One<Output = T> + Add<T, Output = T> + Mul<T, Output = T> + Sub<T, Output = T>,
     {
         let q0 = state.get_row(0);
         let q1 = state.get_row(1);
@@ -167,6 +213,28 @@ impl<T> OwnedOrientationEstimator<T> {
         Vector3::new(x, y, z)
     }
 
+    fn normalize_state_quaternion(&mut self)
+    where
+        T: MatrixDataType,
+    {
+        self.filter.state_vector_mut().apply(|vec| {
+            let a = vec.get_row(0);
+            let b = vec.get_row(1);
+            let c = vec.get_row(2);
+            let d = vec.get_row(3);
+            let norm_sq = a * a + b * b + c * c + d * d;
+            let norm = norm_sq.square_root();
+            let a = a / norm;
+            let b = b / norm;
+            let c = c / norm;
+            let d = d / norm;
+            vec.set_row(0, a);
+            vec.set_row(1, b);
+            vec.set_row(2, c);
+            vec.set_row(3, d);
+        });
+    }
+
     #[allow(unused)]
     fn panic_if_nan(&self)
     where
@@ -178,6 +246,139 @@ impl<T> OwnedOrientationEstimator<T> {
                 panic!("NaN angle detected in state estimate")
             }
         });
+    }
+
+    /// Gets the estimated quaternion in (w, x, y, z) order.
+    fn estimated_quaternion(&self) -> (T, T, T, T)
+    where
+        T: Copy,
+    {
+        self.filter.state_vector().inspect(|vec| {
+            (
+                vec.get_row(0),
+                vec.get_row(1),
+                vec.get_row(2),
+                vec.get_row(3),
+            )
+        })
+    }
+
+    /// Obtains the current estimates of the roll, pitch and yaw angles.
+    pub fn estimated_angles(&self) -> EulerAngles<T>
+    where
+        T: One
+            + Copy
+            + Abs<T, Output = T>
+            + ArcSin<T, Output = T>
+            + ArcTan<T, Output = T>
+            + Mul<T, Output = T>
+            + Add<T, Output = T>
+            + Sub<T, Output = T>,
+    {
+        EulerAngles::new(self.roll(), self.pitch(), self.yaw())
+    }
+
+    /// Obtains the current estimate of the roll angle φ (phi), in radians.
+    ///
+    /// The roll angle is defined as the amount rotation around the y-axis (forward).
+    pub fn roll(&self) -> T
+    where
+        T: One
+            + Copy
+            + ArcTan<T, Output = T>
+            + Mul<T, Output = T>
+            + Add<T, Output = T>
+            + Sub<T, Output = T>,
+    {
+        let (w, x, y, z) = self.estimated_quaternion();
+        let one = T::one();
+        let two = one + one;
+        let sinr_cosp = two * (w * x + y * z);
+        let cosr_cosp = one - two * (x * x + y * y);
+        sinr_cosp.atan2(cosr_cosp)
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the roll angle φ (phi), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn roll_variance(&self) -> T
+    where
+        T: Zero,
+    {
+        T::zero()
+    }
+
+    /// Obtains the current estimate of the pitch angle θ (theta), in radians.
+    ///
+    /// The pitch angle is defined as the amount rotation around the x-axis (right).
+    pub fn pitch(&self) -> T
+    where
+        T: One
+            + Copy
+            + Abs<T, Output = T>
+            + ArcSin<T, Output = T>
+            + Mul<T, Output = T>
+            + Add<T, Output = T>
+            + Sub<T, Output = T>,
+    {
+        let (w, x, y, z) = self.estimated_quaternion();
+        let one = T::one();
+        let two = one + one;
+        let sinp = two * (w * y - z * x);
+        // TODO: If sin >= 1.0 || sin <= -1.0, clamp to +/- pi/2 instead
+        sinp.arcsin()
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the pitch angle θ (theta), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn pitch_variance(&self) -> T
+    where
+        T: Zero,
+    {
+        T::zero()
+    }
+
+    /// Obtains the current estimate of the yaw angle ψ (psi), in radians.
+    ///
+    /// The yaw angle is defined as the amount rotation around the z-axis (up).
+    pub fn yaw(&self) -> T
+    where
+        T: One
+            + Copy
+            + ArcTan<T, Output = T>
+            + Mul<T, Output = T>
+            + Add<T, Output = T>
+            + Sub<T, Output = T>,
+    {
+        let (w, x, y, z) = self.estimated_quaternion();
+        let one = T::one();
+        let two = one + one;
+        let siny_cosp = two * (w * z + x * y);
+        let cosy_cosp = one - two * (y * y + z * z);
+        siny_cosp.atan2(cosy_cosp)
+    }
+
+    /// Obtains the current estimation variance (uncertainty) of the yaw angle ψ (psi), in radians².
+    ///
+    /// ## Interpretation
+    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
+    ///   considered to be precise, as it doesn't vary much from the mean.
+    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
+    ///   considered to be less precise, as it has a wide spread around the mean.
+    pub fn yaw_variance(&self) -> T
+    where
+        T: Zero,
+    {
+        T::zero()
     }
 }
 
@@ -308,11 +509,11 @@ impl<T> OwnedOrientationEstimator<T> {
                     T,
                 >([zero; { MAG_OBSERVATIONS * MAG_OBSERVATIONS }]),
             );
-
-        let noise_covariance_value = accelerometer_noise.x * magnetometer_noise.x
-            + accelerometer_noise.y * magnetometer_noise.y
-            + accelerometer_noise.z * magnetometer_noise.z;
-        noise_covariance.make_scalar(noise_covariance_value);
+        noise_covariance.apply(|mat| {
+            mat.set_at(0, 0, magnetometer_noise.x);
+            mat.set_at(1, 1, magnetometer_noise.y);
+            mat.set_at(2, 2, magnetometer_noise.z);
+        });
 
         // Innovation vector
         let innovation_vector =
@@ -442,11 +643,11 @@ impl<T> OwnedOrientationEstimator<T> {
                     T,
                 >([zero; { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS }]),
             );
-
-        let noise_covariance_value = accelerometer_noise.x * magnetometer_noise.x
-            + accelerometer_noise.y * magnetometer_noise.y
-            + accelerometer_noise.z * magnetometer_noise.z;
-        noise_covariance.make_scalar(noise_covariance_value);
+        noise_covariance.apply(|mat| {
+            mat.set_at(0, 0, accelerometer_noise.x);
+            mat.set_at(1, 1, accelerometer_noise.y);
+            mat.set_at(2, 2, accelerometer_noise.z);
+        });
 
         // Innovation vector
         let innovation_vector =

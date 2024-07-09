@@ -20,23 +20,29 @@ pub trait IsNaN {
     fn is_nan(&self) -> bool;
 }
 
-pub trait NormalizeAngle<T> {
+pub trait NormalizeAngle<T = Self> {
     type Output;
 
     /// Normalizes the angle into the range -π to π.
     fn normalize_angle(self) -> Self::Output;
 }
 
-pub trait ArcTan<T> {
+pub trait ArcTan<T = Self> {
     type Output;
 
     fn atan2(self, rhs: T) -> Self::Output;
 }
 
-pub trait ArcSin<T> {
+pub trait ArcSin<T = Self> {
     type Output;
 
     fn arcsin(self) -> Self::Output;
+}
+
+pub trait Abs<T = Self> {
+    type Output;
+
+    fn abs(self) -> Self::Output;
 }
 
 impl IsNaN for f32 {
@@ -84,6 +90,17 @@ impl NormalizeAngle<f64> for f64 {
             normalized += std::f64::consts::TAU;
         }
         normalized
+    }
+}
+
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg(feature = "std")]
+impl Abs<f32> for f32 {
+    type Output = f32;
+
+    #[inline(always)]
+    fn abs(self) -> Self::Output {
+        f32::abs(self)
     }
 }
 

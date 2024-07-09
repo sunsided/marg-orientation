@@ -1,11 +1,11 @@
-use coordinate_frame::{EastNorthUp, NorthWestDown, SouthEastUp};
+use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp};
 use csv::ReaderBuilder;
 use kiss3d::camera::FirstPerson;
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
 use kiss3d::text::Font;
 use kiss3d::window::Window;
-use marg_orientation::test_estimator::OwnedOrientationEstimator;
+use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
 use marg_orientation::{
     AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
     MagnetometerNoise, MagnetometerReading,
@@ -97,7 +97,7 @@ impl From<&LSM303DLHCAccelerometer> for AccelerometerReading<f32> {
         let frame = NorthWestDown::new(value.acc_x, value.acc_y, value.acc_z);
         // Normalize by the sensor value range.
         let frame = frame / 16384.0;
-        AccelerometerReading::from_ned(frame)
+        AccelerometerReading::north_east_down(frame)
     }
 }
 
@@ -113,7 +113,7 @@ impl From<&LSM303DLHCMagnetometer> for MagnetometerReading<f32> {
         let frame = SouthEastUp::new(value.compass_x, value.compass_y, value.compass_z);
         // Normalize by the sensor value range.
         let frame = frame / 1100.0;
-        MagnetometerReading::from_ned(frame)
+        MagnetometerReading::north_east_down(frame)
     }
 }
 
@@ -129,7 +129,7 @@ impl From<&L3GD20Gyro> for GyroscopeReading<f32> {
         let frame = EastNorthUp::new(value.gyro_x, value.gyro_y, value.gyro_z);
         // Normalize by the sensor value range.
         let frame = frame / 5.714285;
-        GyroscopeReading::from_ned(frame)
+        GyroscopeReading::north_east_down(frame)
     }
 }
 
@@ -238,14 +238,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("- Magnetometer readings:  {compass_sample_rate} Hz (expected 75 Hz)");
     println!("- Gyroscope readings: {gyro_sample_rate} Hz (expected 400 Hz)");
 
+    // Magnetic field reference for Berlin, Germany expressed in North, East, Down.
+    let reference = MagneticReference::new(18.0, 1.5, 47.0);
+
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
-        0.01,
         AccelerometerNoise::new(0.07, 0.07, 0.07),
-        GyroscopeNoise::new(0.13, 0.1, 0.54),
-        // GyroscopeBias::new(1.0, 0.0, -4.0),
-        GyroscopeBias::default(),
         MagnetometerNoise::new(0.18, 0.11, 0.34),
+        reference,
+        0.01,
         1e-6,
     );
 
@@ -270,9 +271,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut camera = FirstPerson::new(eye, at);
     camera.set_up_axis(Vector3::new(0.0, 0.0, 1.0));
 
+    // Some colors.
+    let red = Point3::new(1.0, 0.0, 0.0);
+    let green = Point3::new(0.0, 1.0, 0.0);
+    let blue = Point3::new(0.0, 0.0, 1.0);
+    let dark_red = red * 0.5;
+    let dark_green = green * 0.5;
+    let dark_blue = blue * 0.5;
+
     // Walk through the simulation data.
     let mut accel_index = 0;
     let mut compass_index = 0;
+    let mut gyro_index = 0;
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
@@ -284,32 +294,37 @@ fn main() -> Result<(), Box<dyn Error>> {
         last_time = now;
 
         // Enable updates when we receive new data.
-        let mut should_update = false;
+        let mut acc_should_update = false;
+        let mut mag_should_update = false;
+        let mut gyro_should_update = false;
 
         // Increment simulation index.
         while accel[accel_index].time < simulation_time.as_secs_f64() {
             accel_index += 1;
-            should_update = true;
+            acc_should_update = true;
             if accel_index >= gyro.len() {
                 accel_index = 0;
+                gyro_index = 0;
                 compass_index = 0;
                 simulation_time = Duration::default();
             }
         }
-        while gyro[accel_index].time < simulation_time.as_secs_f64() {
-            accel_index += 1;
-            should_update = true;
+        while gyro[gyro_index].time < simulation_time.as_secs_f64() {
+            gyro_index += 1;
+            gyro_should_update = true;
             if accel_index >= gyro.len() {
                 accel_index = 0;
+                gyro_index = 0;
                 compass_index = 0;
                 simulation_time = Duration::default();
             }
         }
         while compass[compass_index].time < simulation_time.as_secs_f64() {
             compass_index += 1;
-            should_update = true;
+            mag_should_update = true;
             if compass_index >= compass.len() {
                 accel_index = 0;
+                gyro_index = 0;
                 compass_index = 0;
                 simulation_time = Duration::default();
             }
@@ -320,21 +335,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         let compass_meas = &compass[compass_index];
 
         // Run a prediction.
-        estimator.predict(elapsed_time.as_secs_f32(), &gyro_meas.reading);
+        estimator.predict();
 
         let estimated_angles = estimator.estimated_angles();
         if estimated_angles.yaw_psi.is_nan()
             || estimated_angles.pitch_theta.is_nan()
             || estimated_angles.roll_phi.is_nan()
         {
-            todo!();
+            todo!("nan before correction");
         }
 
         // Update the filter when needed.
-        if should_update {
+        if acc_should_update {
             let accelerometer = accel_meas.reading;
-            let magnetometer = compass_meas.reading;
-            estimator.correct(&accelerometer, &magnetometer);
+            estimator.correct_accelerometer(&accelerometer);
+        }
+        if mag_should_update {
+            let accelerometer = accel_meas.reading;
+            estimator.correct_accelerometer(&accelerometer);
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -342,7 +360,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             || estimated_angles.pitch_theta.is_nan()
             || estimated_angles.roll_phi.is_nan()
         {
-            todo!();
+            todo!("nan after correction");
         }
 
         // Obtain a rotation matrix from the estimated angles.
@@ -354,7 +372,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         let filter_x = Point3::from((rotation * Vector3::new(1.0, 0.0, 0.0)).normalize());
         let filter_y = Point3::from((rotation * Vector3::new(0.0, 1.0, 0.0)).normalize());
-        let filter_z = Point3::from((rotation * Vector3::new(0.0, 0.0, -1.0)).normalize());
+        let filter_z = Point3::from((rotation * Vector3::new(0.0, 0.0, 1.0)).normalize());
 
         // Display elapsed time since last frame.
         let info = format!(
@@ -391,33 +409,41 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display default coordinate system.
-        window.draw_line(
-            &Point3::default(),
-            &Point3::new(1.0, 0.0, 0.0),
-            &Point3::new(1.0, 0.0, 0.0),
-        );
-        window.draw_line(
-            &Point3::default(),
-            &Point3::new(0.0, 1.0, 0.0),
-            &Point3::new(0.0, 1.0, 0.0),
-        );
-        window.draw_line(
-            &Point3::default(),
-            &Point3::new(0.0, 0.0, -1.0),
-            &Point3::new(0.0, 0.0, -1.0),
-        );
+        window.draw_line(&Point3::default(), &Point3::new(1.0, 0.0, 0.0), &dark_red); // north
+        window.draw_line(&Point3::default(), &Point3::new(0.0, 1.0, 0.0), &dark_green); // east
+        window.draw_line(&Point3::default(), &Point3::new(0.0, 0.0, -1.0), &dark_blue); // down
+
+        // Convert estimations.
+        let ex = NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]);
+        let ey = NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]);
+        let ez = NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]);
+        let ex = EastNorthUp::from(ex);
+        let ey = EastNorthUp::from(ey);
+        let ez = EastNorthUp::from(ez);
+        let ex = Point3::new(ex.x(), ex.y(), ex.z());
+        let ey = Point3::new(ey.x(), ey.y(), ey.z());
+        let ez = Point3::new(ez.x(), ez.y(), ez.z());
 
         // Display estimated orientation.
-        window.draw_line(&Point3::default(), &filter_x, &Point3::new(1.0, 0.0, -0.0));
-        window.draw_line(&Point3::default(), &filter_y, &Point3::new(0.0, 1.0, -0.0));
-        window.draw_line(&Point3::default(), &filter_z, &Point3::new(0.0, 0.0, -1.0));
+        window.draw_line(&Point3::default(), &ex, &red);
+        window.draw_line(&Point3::default(), &ey, &green);
+        window.draw_line(&Point3::default(), &ez, &blue);
 
-        // Display raw accelerometer orientation.
-        window.draw_line(
-            &Point3::default(),
-            &Point3::new(accel_meas.x, accel_meas.y, -accel_meas.z),
-            &Point3::new(0.5, 0.0, 1.0),
-        );
+        // Convert readings.
+        let am = NorthEastDown::new(accel_meas.x, accel_meas.y, accel_meas.z);
+        let mm = NorthEastDown::new(compass_meas.x, compass_meas.y, compass_meas.z);
+        let am = EastNorthUp::from(am);
+        let mm = EastNorthUp::from(mm);
+
+        // Display the accelerometer reading.
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(am.x(), am.y(), am.z());
+        // window.draw_line(&p1, &p2, &Point3::new(0.5, 0.0, 1.0));
+
+        // Display the compass reading.
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(mm.x(), mm.y(), mm.z());
+        // window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.5));
 
         // Display simulation indexes.
         let info = format!(
@@ -536,11 +562,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
+            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.roll_phi,
             estimator.roll_variance().sqrt(),
             estimated_angles.roll_phi * 180.0 / std::f32::consts::PI,
-            estimator.roll_rate_bias()
         );
         window.draw_text(
             &info,
@@ -552,11 +577,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
+            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.pitch_theta,
             estimator.pitch_variance().sqrt(),
             estimated_angles.pitch_theta * 180.0 / std::f32::consts::PI,
-            estimator.pitch_rate_bias()
         );
         window.draw_text(
             &info,
@@ -568,11 +592,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°), bias = {:+0.02} rad/s",
+            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
             estimated_angles.yaw_psi,
             estimator.yaw_variance().sqrt(),
             estimated_angles.yaw_psi * 180.0 / std::f32::consts::PI,
-            estimator.yaw_rate_bias()
         );
         window.draw_text(
             &info,
@@ -581,16 +604,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             &font,
             &Point3::new(1.0, 1.0, 1.0),
         );
-
-        // Display the accelerometer reading.
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(accel_meas.x, accel_meas.y, accel_meas.z);
-        window.draw_line(&p1, &p2, &Point3::new(1.0, 1.0, 0.0));
-
-        // Display the compass reading.
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(compass_meas.x, compass_meas.y, compass_meas.z);
-        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 1.0));
     }
 
     Ok(())
