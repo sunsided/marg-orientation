@@ -123,13 +123,19 @@ impl<T> OwnedOrientationEstimator<T> {
             });
 
         // Perform the update step.
+        let two = T::one() + T::one();
+        let (q0, q1, q2, q3) = self.estimated_quaternion();
         self.filter
             .correct_nonlinear(&mut self.acc_measurement, |state, measurement| {
-                let down = Vector3::new(T::zero(), T::zero(), T::one());
-                let rotated = Self::rotate_vector(state, &down);
-                measurement.set_row(0, rotated.x);
-                measurement.set_row(1, rotated.y);
-                measurement.set_row(2, rotated.z);
+                // let down = Vector3::new(T::zero(), T::zero(), T::one());
+                // let rotated = Self::rotate_vector(state, &down);
+                // measurement.set_row(0, rotated.x);
+                // measurement.set_row(1, rotated.y);
+                // measurement.set_row(2, rotated.z);
+
+                measurement.set_row(0, two * (q1 * q3 - q0 * q2));
+                measurement.set_row(1, two * (q2 * q3 + q0 * q1));
+                measurement.set_row(2, T::one() - two * (q1 * q1 + q2 * q2));
             });
 
         self.normalize_state_quaternion();

@@ -255,7 +255,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         AccelerometerNoise::new(0.07, 0.07, 0.07),
         MagnetometerNoise::new(0.18, 0.11, 0.34),
         reference,
-        0.01,
+        0.001,
         1e-6,
     );
 
