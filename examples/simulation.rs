@@ -1,6 +1,4 @@
-use coordinate_frame::{
-    EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, SouthWestDown, SouthWestUp, WestUpNorth,
-};
+use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
 use csv::ReaderBuilder;
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Point2, Point3, Rotation3, Scalar, Vector3};
@@ -23,8 +21,8 @@ const DISPLAY_ESTIMATIONS: bool = true;
 const DISPLAY_RAW_ACCEL: bool = true;
 const DISPLAY_RAW_MAG: bool = true;
 
-const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
+const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
 // const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
 
 /// Kiss3d uses a West, Up, North system by default.
@@ -376,9 +374,22 @@ fn main() -> Result<(), Box<dyn Error>> {
             estimated_angles.pitch_theta,
             estimated_angles.yaw_psi,
         );
-        let filter_x = Point3::from(rotation * kiss3d_point(NorthEastDown::new(1.0, 0.0, 0.0)));
-        let filter_y = Point3::from(rotation * kiss3d_point(NorthEastDown::new(0.0, 1.0, 0.0)));
-        let filter_z = Point3::from(rotation * kiss3d_point(NorthEastDown::new(0.0, 0.0, 1.0)));
+
+        let north = NorthEastDown::new(1.0, 0.0, 0.0);
+        let east = NorthEastDown::new(0.0, 1.0, 0.0);
+        let down = NorthEastDown::new(0.0, 0.0, 1.0);
+
+        let north = Point3::new(north.x(), north.y(), north.z());
+        let east = Point3::new(east.x(), east.y(), east.z());
+        let down = Point3::new(down.x(), down.y(), down.z());
+
+        let filter_x = Point3::from(rotation * north);
+        let filter_y = Point3::from(rotation * east);
+        let filter_z = Point3::from(rotation * down);
+
+        let filter_x = kiss3d_point(NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]));
+        let filter_y = kiss3d_point(NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]));
+        let filter_z = kiss3d_point(NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]));
 
         // Display elapsed time since last frame.
         let info = format!(
