@@ -1,8 +1,9 @@
-use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp};
+use coordinate_frame::{
+    EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, SouthWestDown, SouthWestUp, WestUpNorth,
+};
 use csv::ReaderBuilder;
-use kiss3d::camera::FirstPerson;
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Point2, Point3, Rotation3, Vector3};
+use kiss3d::nalgebra::{Point2, Point3, Rotation3, Scalar, Vector3};
 use kiss3d::text::Font;
 use kiss3d::window::Window;
 use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
@@ -16,6 +17,18 @@ use std::error::Error;
 use std::ops::Deref;
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+const DISPLAY_REFERENCE: bool = true;
+const DISPLAY_ESTIMATIONS: bool = true;
+const DISPLAY_RAW_ACCEL: bool = true;
+const DISPLAY_RAW_MAG: bool = true;
+
+const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
+
+/// Kiss3d uses a West, Up, North system by default.
+type Kiss3DCoordinates<T> = WestUpNorth<T>;
 
 /// LSM303DLHC accelerometer readings.
 #[derive(Debug, Deserialize)]
@@ -194,15 +207,13 @@ impl<R> Deref for Timed<R> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let dataset = "serial-sensors/2024-07-06/stm32f3discovery";
-
     let gyro =
-        read_csv::<L3GD20Gyro>(format!("tests/data/{dataset}/106-gyro-i16-x1.csv").as_str())?;
+        read_csv::<L3GD20Gyro>(format!("tests/data/{DATASET}/106-gyro-i16-x1.csv").as_str())?;
     let compass = read_csv::<LSM303DLHCMagnetometer>(
-        format!("tests/data/{dataset}/30-mag-i16-x3.csv").as_str(),
+        format!("tests/data/{DATASET}/30-mag-i16-x3.csv").as_str(),
     )?;
     let accel = read_csv::<LSM303DLHCAccelerometer>(
-        format!("tests/data/{dataset}/25-acc-i16-x3.csv").as_str(),
+        format!("tests/data/{DATASET}/25-acc-i16-x3.csv").as_str(),
     )?;
 
     // Obtain the offset times.
@@ -258,18 +269,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut window = Window::new("MPU6050 and HMC8533L simulation");
     window.set_framerate_limit(Some(30));
+    window.set_background_color(0.2, 0.2, 0.2);
 
     let mut c = window.add_cube(0.02, 0.02, 0.02);
     c.set_color(1.0, 1.0, 1.0);
 
     window.set_light(Light::StickToCamera);
-
-    // Create a custom camera where Z is up, Y is forward, and X is right
-    // Position the camera such that it aligns with the new coordinate system
-    let eye = Point3::new(0.5, -2.0, 0.5);
-    let at = Point3::new(0.1, 0.1, 0.1);
-    let mut camera = FirstPerson::new(eye, at);
-    camera.set_up_axis(Vector3::new(0.0, 0.0, 1.0));
 
     // Some colors.
     let red = Point3::new(1.0, 0.0, 0.0);
@@ -286,7 +291,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
-    while window.render_with_camera(&mut camera) {
+    while window.render() {
         // Obtain the current render timestamp.
         let now = Instant::now();
         let elapsed_time = now - last_time;
@@ -334,6 +339,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let gyro_meas = &gyro[accel_index];
         let compass_meas = &compass[compass_index];
 
+        // Calculate the angle between the magnetic field vector and the down vector.
+        let angle_mag_accel = calculate_angle_acc_mag(accel_meas, compass_meas);
+
         // Run a prediction.
         estimator.predict();
 
@@ -347,12 +355,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Update the filter when needed.
         if acc_should_update {
-            let accelerometer = accel_meas.reading;
-            estimator.correct_accelerometer(&accelerometer);
+            estimator.correct_accelerometer(&accel_meas.reading);
         }
         if mag_should_update {
-            let accelerometer = accel_meas.reading;
-            estimator.correct_accelerometer(&accelerometer);
+            estimator.correct_magnetometer(&compass_meas.reading);
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -370,9 +376,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             estimated_angles.pitch_theta,
             estimated_angles.yaw_psi,
         );
-        let filter_x = Point3::from((rotation * Vector3::new(1.0, 0.0, 0.0)).normalize());
-        let filter_y = Point3::from((rotation * Vector3::new(0.0, 1.0, 0.0)).normalize());
-        let filter_z = Point3::from((rotation * Vector3::new(0.0, 0.0, 1.0)).normalize());
+        let filter_x = Point3::from(rotation * kiss3d_point(NorthEastDown::new(1.0, 0.0, 0.0)));
+        let filter_y = Point3::from(rotation * kiss3d_point(NorthEastDown::new(0.0, 1.0, 0.0)));
+        let filter_z = Point3::from(rotation * kiss3d_point(NorthEastDown::new(0.0, 0.0, 1.0)));
 
         // Display elapsed time since last frame.
         let info = format!(
@@ -409,41 +415,45 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display default coordinate system.
-        window.draw_line(&Point3::default(), &Point3::new(1.0, 0.0, 0.0), &dark_red); // north
-        window.draw_line(&Point3::default(), &Point3::new(0.0, 1.0, 0.0), &dark_green); // east
-        window.draw_line(&Point3::default(), &Point3::new(0.0, 0.0, -1.0), &dark_blue); // down
+        #[allow(dead_code)]
+        if DISPLAY_REFERENCE {
+            let x_axis = NorthEastDown::new(1.0, 0.0, 0.0);
+            let y_axis = NorthEastDown::new(0.0, 1.0, 0.0);
+            let z_axis = NorthEastDown::new(0.0, 0.0, 1.0);
+
+            window.draw_line(&Point3::default(), &kiss3d_point(x_axis), &dark_red);
+            window.draw_line(&Point3::default(), &kiss3d_point(y_axis), &dark_green);
+            window.draw_line(&Point3::default(), &kiss3d_point(z_axis), &dark_blue);
+        }
 
         // Convert estimations.
-        let ex = NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]);
-        let ey = NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]);
-        let ez = NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]);
-        let ex = EastNorthUp::from(ex);
-        let ey = EastNorthUp::from(ey);
-        let ez = EastNorthUp::from(ez);
-        let ex = Point3::new(ex.x(), ex.y(), ex.z());
-        let ey = Point3::new(ey.x(), ey.y(), ey.z());
-        let ez = Point3::new(ez.x(), ez.y(), ez.z());
+        #[allow(dead_code)]
+        if DISPLAY_ESTIMATIONS {
+            let ex = NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]);
+            let ey = NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]);
+            let ez = NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]);
 
-        // Display estimated orientation.
-        window.draw_line(&Point3::default(), &ex, &red);
-        window.draw_line(&Point3::default(), &ey, &green);
-        window.draw_line(&Point3::default(), &ez, &blue);
-
-        // Convert readings.
-        let am = NorthEastDown::new(accel_meas.x, accel_meas.y, accel_meas.z);
-        let mm = NorthEastDown::new(compass_meas.x, compass_meas.y, compass_meas.z);
-        let am = EastNorthUp::from(am);
-        let mm = EastNorthUp::from(mm);
+            // Display estimated orientation.
+            window.draw_line(&Point3::default(), &filter_x, &red);
+            window.draw_line(&Point3::default(), &filter_y, &green);
+            window.draw_line(&Point3::default(), &filter_z, &blue);
+        }
 
         // Display the accelerometer reading.
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(am.x(), am.y(), am.z());
-        window.draw_line(&p1, &p2, &Point3::new(0.5, 0.0, 1.0));
+        let am = NorthEastDown::new(accel_meas.x, accel_meas.y, accel_meas.z);
+        #[allow(dead_code)]
+        if DISPLAY_RAW_ACCEL {
+            let p1 = Point3::new(0.0, 0.0, 0.0);
+            window.draw_line(&p1, &kiss3d_point(am), &Point3::new(0.5, 0.0, 1.0));
+        }
 
         // Display the compass reading.
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(mm.x(), mm.y(), mm.z());
-        window.draw_line(&p1, &p2, &Point3::new(1.0, 0.0, 0.5));
+        let mm = NorthEastDown::new(compass_meas.x, compass_meas.y, compass_meas.z);
+        #[allow(dead_code)]
+        if DISPLAY_RAW_MAG {
+            let p1 = Point3::new(0.0, 0.0, 0.0);
+            window.draw_line(&p1, &kiss3d_point(mm), &Point3::new(1.0, 0.0, 0.5));
+        }
 
         // Display simulation indexes.
         let info = format!(
@@ -453,6 +463,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         window.draw_text(
             &info,
             &Point2::new(0.0, 92.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
+        );
+
+        // Display angle between measured accelerometer and magnetometer.
+        let info = format!(
+            "cos⁻¹(acc·mag) = {:+0.02}°",
+            angle_mag_accel * 180.0 / std::f32::consts::PI
+        );
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 17.0),
             32.0,
             &font,
             &Point3::new(1.0, 1.0, 1.0),
@@ -609,6 +632,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn calculate_angle_acc_mag(
+    accel_meas: &Timed<AccelerometerReading<f32>>,
+    compass_meas: &Timed<MagnetometerReading<f32>>,
+) -> f32 {
+    let accel_vec: Vector3<_> = Vector3::new(accel_meas.x, accel_meas.y, accel_meas.z).normalize();
+    let mag_vec: Vector3<_> =
+        Vector3::new(compass_meas.x, compass_meas.y, compass_meas.z).normalize();
+    accel_vec.dot(&mag_vec).acos()
+}
+
 fn determine_sampling<T: Time>(data: &[T]) -> (f64, f64) {
     let (total_diff, count) = data.windows(2).fold((0.0, 0), |(sum, cnt), window| {
         let diff = window[1].time() - window[0].time();
@@ -629,4 +662,13 @@ fn read_csv<T: DeserializeOwned>(file_path: &str) -> Result<Vec<T>, Box<dyn Erro
     }
 
     Ok(data)
+}
+
+fn kiss3d_point<C, T>(vector: C) -> Point3<T>
+where
+    C: Into<Kiss3DCoordinates<T>>,
+    T: Scalar,
+{
+    let vector = vector.into();
+    Point3::new(vector.x(), vector.y(), vector.z())
 }
