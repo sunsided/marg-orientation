@@ -19,6 +19,7 @@ mod magnetometer_reading;
 mod num_traits;
 pub mod test_estimator;
 mod vector3;
+pub mod gyro;
 
 pub use crate::accelerometer_noise::AccelerometerNoise;
 pub use crate::accelerometer_reading::AccelerometerReading;

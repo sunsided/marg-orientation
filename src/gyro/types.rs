@@ -1,12 +1,12 @@
 use minikalman::buffers::types::*;
-use minikalman::extended::{ExtendedKalman, ExtendedObservation};
 use minikalman::prelude::*;
+use minikalman::regular::{RegularKalman, RegularObservation};
 
-pub const STATES: usize = 4; // quaternion components
-pub const VEC3_OBSERVATIONS: usize = 3; // x, y, z
+pub const STATES: usize = 2; // angular velocity, bias
+pub const OBSERVATIONS: usize = 1; // angular velocity
 
 // A Kalman filter of four states, using owned buffers.
-pub type OwnedKalmanFilter<T> = ExtendedKalman<
+pub type OwnedKalmanFilter<T> = RegularKalman<
     STATES,
     T,
     StateTransitionMatrixMutBuffer<
@@ -30,58 +30,58 @@ pub type OwnedKalmanFilter<T> = ExtendedKalman<
 >;
 
 /// On observation of three states, using owned buffers.
-pub type OwnedVector3Observation<T> = ExtendedObservation<
+pub type OwnedObservation<T> = RegularObservation<
     STATES,
-    VEC3_OBSERVATIONS,
+    OBSERVATIONS,
     T,
     ObservationMatrixMutBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         STATES,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>,
+        MatrixDataArray<OBSERVATIONS, STATES, { OBSERVATIONS * STATES }, T>,
     >,
     MeasurementVectorBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, 1, VEC3_OBSERVATIONS, T>,
+        MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>,
     >,
     MeasurementNoiseCovarianceMatrixBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, VEC3_OBSERVATIONS, { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     InnovationVectorBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, 1, VEC3_OBSERVATIONS, T>,
+        MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>,
     >,
     InnovationCovarianceMatrixBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, VEC3_OBSERVATIONS, 9, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     KalmanGainMatrixBuffer<
         STATES,
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<STATES, OBSERVATIONS, { STATES * OBSERVATIONS }, T>,
     >,
     TemporaryResidualCovarianceInvertedMatrixBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, VEC3_OBSERVATIONS, { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     TemporaryHPMatrixBuffer<
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         STATES,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>,
+        MatrixDataArray<OBSERVATIONS, STATES, { OBSERVATIONS * STATES }, T>,
     >,
     TemporaryPHTMatrixBuffer<
         STATES,
-        VEC3_OBSERVATIONS,
+        OBSERVATIONS,
         T,
-        MatrixDataArray<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<STATES, OBSERVATIONS, { STATES * OBSERVATIONS }, T>,
     >,
     TemporaryKHPMatrixBuffer<STATES, T, MatrixDataArray<STATES, STATES, { STATES * STATES }, T>>,
 >;

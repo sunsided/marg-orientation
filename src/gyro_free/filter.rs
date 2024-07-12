@@ -482,33 +482,33 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Measurement vector
         let measurement =
-            MeasurementVectorBuffer::<MAG_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                MAG_OBSERVATIONS,
+            MeasurementVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                VEC3_OBSERVATIONS,
                 1,
-                MAG_OBSERVATIONS,
+                VEC3_OBSERVATIONS,
                 T,
             >(
-                [zero; MAG_OBSERVATIONS]
+                [zero; VEC3_OBSERVATIONS]
             ));
 
         // Observation matrix
         let mut observation_matrix =
-            ObservationMatrixMutBuffer::<MAG_OBSERVATIONS, STATES, T, _>::new(
-                MatrixData::new_array::<MAG_OBSERVATIONS, STATES, { MAG_OBSERVATIONS * STATES }, T>(
-                    [zero; { MAG_OBSERVATIONS * STATES }],
+            ObservationMatrixMutBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
+                MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
+                    [zero; { VEC3_OBSERVATIONS * STATES }],
                 ),
             );
         observation_matrix.set_all(T::zero());
 
         // Measurement noise covariance
         let mut noise_covariance =
-            MeasurementNoiseCovarianceMatrixBuffer::<MAG_OBSERVATIONS, T, _>::new(
+            MeasurementNoiseCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
                 MatrixData::new_array::<
-                    MAG_OBSERVATIONS,
-                    MAG_OBSERVATIONS,
-                    { MAG_OBSERVATIONS * MAG_OBSERVATIONS },
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                     T,
-                >([zero; { MAG_OBSERVATIONS * MAG_OBSERVATIONS }]),
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
         noise_covariance.apply(|mat| {
             mat.set_at(0, 0, magnetometer_noise.x);
@@ -518,58 +518,58 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Innovation vector
         let innovation_vector =
-            InnovationVectorBuffer::<MAG_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                MAG_OBSERVATIONS,
+            InnovationVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                VEC3_OBSERVATIONS,
                 1,
-                MAG_OBSERVATIONS,
+                VEC3_OBSERVATIONS,
                 T,
             >(
-                [zero; MAG_OBSERVATIONS]
+                [zero; VEC3_OBSERVATIONS]
             ));
 
         // Innovation covariance matrix
-        let innovation_covariance = InnovationCovarianceMatrixBuffer::<MAG_OBSERVATIONS, T, _>::new(
+        let innovation_covariance = InnovationCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
             MatrixData::new_array::<
-                MAG_OBSERVATIONS,
-                MAG_OBSERVATIONS,
-                { MAG_OBSERVATIONS * MAG_OBSERVATIONS },
+                VEC3_OBSERVATIONS,
+                VEC3_OBSERVATIONS,
+                { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                 T,
-            >([zero; { MAG_OBSERVATIONS * MAG_OBSERVATIONS }]),
+            >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
         );
 
         // Kalman Gain matrix
         let kalman_gain =
-            KalmanGainMatrixBuffer::<STATES, MAG_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+            KalmanGainMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
                 STATES,
-                MAG_OBSERVATIONS,
-                { STATES * MAG_OBSERVATIONS },
+                VEC3_OBSERVATIONS,
+                { STATES * VEC3_OBSERVATIONS },
                 T,
             >(
-                [zero; { STATES * MAG_OBSERVATIONS }],
+                [zero; { STATES * VEC3_OBSERVATIONS }],
             ));
 
         // Temporary residual covariance inverted matrix
         let temp_sinv =
-            TemporaryResidualCovarianceInvertedMatrixBuffer::<MAG_OBSERVATIONS, T, _>::new(
+            TemporaryResidualCovarianceInvertedMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
                 MatrixData::new_array::<
-                    MAG_OBSERVATIONS,
-                    MAG_OBSERVATIONS,
-                    { MAG_OBSERVATIONS * MAG_OBSERVATIONS },
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                     T,
-                >([zero; { MAG_OBSERVATIONS * MAG_OBSERVATIONS }]),
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
 
         // Temporary H×P matrix
-        let temp_hp = TemporaryHPMatrixBuffer::<MAG_OBSERVATIONS, STATES, T, _>::new(
-            MatrixData::new_array::<MAG_OBSERVATIONS, STATES, { MAG_OBSERVATIONS * STATES }, T>(
-                [zero; { MAG_OBSERVATIONS * STATES }],
+        let temp_hp = TemporaryHPMatrixBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
+            MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
+                [zero; { VEC3_OBSERVATIONS * STATES }],
             ),
         );
 
         // Temporary P×Hᵀ matrix
-        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, MAG_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, MAG_OBSERVATIONS, { STATES * MAG_OBSERVATIONS }, T>(
-                [zero; { STATES * MAG_OBSERVATIONS }],
+        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
+            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
+                [zero; { STATES * VEC3_OBSERVATIONS }],
             ),
         );
 
@@ -583,7 +583,7 @@ impl<T> OwnedOrientationEstimator<T> {
             [zero; { STATES * STATES }]
         ));
 
-        ExtendedObservationBuilder::new::<STATES, MAG_OBSERVATIONS, T>(
+        ExtendedObservationBuilder::new::<STATES, VEC3_OBSERVATIONS, T>(
             observation_matrix,
             measurement,
             noise_covariance,
@@ -608,36 +608,36 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Measurement vector
         let measurement =
-            MeasurementVectorBuffer::<ACCEL_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                ACCEL_OBSERVATIONS,
+            MeasurementVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                VEC3_OBSERVATIONS,
                 1,
-                ACCEL_OBSERVATIONS,
+                VEC3_OBSERVATIONS,
                 T,
             >(
-                [zero; ACCEL_OBSERVATIONS]
+                [zero; VEC3_OBSERVATIONS]
             ));
 
         // Observation matrix
         let mut observation_matrix =
-            ObservationMatrixMutBuffer::<ACCEL_OBSERVATIONS, STATES, T, _>::new(
+            ObservationMatrixMutBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
                 MatrixData::new_array::<
-                    ACCEL_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
                     STATES,
-                    { ACCEL_OBSERVATIONS * STATES },
+                    { VEC3_OBSERVATIONS * STATES },
                     T,
-                >([zero; { ACCEL_OBSERVATIONS * STATES }]),
+                >([zero; { VEC3_OBSERVATIONS * STATES }]),
             );
         observation_matrix.set_all(T::zero());
 
         // Measurement noise covariance
         let mut noise_covariance =
-            MeasurementNoiseCovarianceMatrixBuffer::<ACCEL_OBSERVATIONS, T, _>::new(
+            MeasurementNoiseCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
                 MatrixData::new_array::<
-                    ACCEL_OBSERVATIONS,
-                    ACCEL_OBSERVATIONS,
-                    { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS },
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                     T,
-                >([zero; { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS }]),
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
         noise_covariance.apply(|mat| {
             mat.set_at(0, 0, accelerometer_noise.x);
@@ -647,55 +647,55 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Innovation vector
         let innovation_vector =
-            InnovationVectorBuffer::<ACCEL_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                ACCEL_OBSERVATIONS,
+            InnovationVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                VEC3_OBSERVATIONS,
                 1,
-                ACCEL_OBSERVATIONS,
+                VEC3_OBSERVATIONS,
                 T,
             >(
-                [zero; ACCEL_OBSERVATIONS]
+                [zero; VEC3_OBSERVATIONS]
             ));
 
         // Innovation covariance matrix
         let innovation_covariance =
-            InnovationCovarianceMatrixBuffer::<ACCEL_OBSERVATIONS, T, _>::new(
+            InnovationCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
                 MatrixData::new_array::<
-                    ACCEL_OBSERVATIONS,
-                    ACCEL_OBSERVATIONS,
-                    { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS },
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                     T,
-                >([zero; { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS }]),
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
 
         // Kalman Gain matrix
-        let kalman_gain = KalmanGainMatrixBuffer::<STATES, ACCEL_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, ACCEL_OBSERVATIONS, { STATES * ACCEL_OBSERVATIONS }, T>(
-                [zero; { STATES * ACCEL_OBSERVATIONS }],
+        let kalman_gain = KalmanGainMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
+            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
+                [zero; { STATES * VEC3_OBSERVATIONS }],
             ),
         );
 
         // Temporary residual covariance inverted matrix
         let temp_sinv =
-            TemporaryResidualCovarianceInvertedMatrixBuffer::<ACCEL_OBSERVATIONS, T, _>::new(
+            TemporaryResidualCovarianceInvertedMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
                 MatrixData::new_array::<
-                    ACCEL_OBSERVATIONS,
-                    ACCEL_OBSERVATIONS,
-                    { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS },
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
                     T,
-                >([zero; { ACCEL_OBSERVATIONS * ACCEL_OBSERVATIONS }]),
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
 
         // Temporary H×P matrix
-        let temp_hp = TemporaryHPMatrixBuffer::<ACCEL_OBSERVATIONS, STATES, T, _>::new(
-            MatrixData::new_array::<ACCEL_OBSERVATIONS, STATES, { ACCEL_OBSERVATIONS * STATES }, T>(
-                [zero; { ACCEL_OBSERVATIONS * STATES }],
+        let temp_hp = TemporaryHPMatrixBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
+            MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
+                [zero; { VEC3_OBSERVATIONS * STATES }],
             ),
         );
 
         // Temporary P×Hᵀ matrix
-        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, ACCEL_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, ACCEL_OBSERVATIONS, { STATES * ACCEL_OBSERVATIONS }, T>(
-                [zero; { STATES * ACCEL_OBSERVATIONS }],
+        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
+            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
+                [zero; { STATES * VEC3_OBSERVATIONS }],
             ),
         );
 
@@ -709,7 +709,7 @@ impl<T> OwnedOrientationEstimator<T> {
             [zero; { STATES * STATES }]
         ));
 
-        ExtendedObservationBuilder::new::<STATES, ACCEL_OBSERVATIONS, T>(
+        ExtendedObservationBuilder::new::<STATES, VEC3_OBSERVATIONS, T>(
             observation_matrix,
             measurement,
             noise_covariance,

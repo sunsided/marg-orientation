@@ -11,7 +11,7 @@ use minikalman::regular::{
     Control, ControlBuilder, RegularKalman, RegularKalmanBuilder, RegularObservation,
     RegularObservationBuilder,
 };
-use std::ops::Neg;
+use core::ops::Neg;
 
 const STATES: usize = 6; // roll rate, pitch rate, yaw rate, as well as gyro bias (drift) terms
 const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate
@@ -834,7 +834,7 @@ type OwnedObservation<T> = RegularObservation<
     InnovationCovarianceMatrixBuffer<
         OBSERVATIONS,
         T,
-        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, 9, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     KalmanGainMatrixBuffer<
         STATES,
@@ -845,7 +845,7 @@ type OwnedObservation<T> = RegularObservation<
     TemporaryResidualCovarianceInvertedMatrixBuffer<
         OBSERVATIONS,
         T,
-        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, 9, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     TemporaryHPMatrixBuffer<
         OBSERVATIONS,

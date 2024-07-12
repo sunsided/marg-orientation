@@ -21,8 +21,8 @@ const DISPLAY_ESTIMATIONS: bool = true;
 const DISPLAY_RAW_ACCEL: bool = true;
 const DISPLAY_RAW_MAG: bool = true;
 
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
-const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
 // const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
 
 /// Kiss3d uses a West, Up, North system by default.
@@ -259,6 +259,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         1e-6,
     );
 
+    let mut gyro_x_estimator = marg_orientation::gyro::GyroscopeAxisEstimator::<f32>::new(0.00003, 5.0, 0.001);
+
     // Prepare some basics for the simulation.
     let font = Font::new(Path::new(
         "examples/data/fonts/firamono/FiraMono-Regular.ttf",
@@ -299,7 +301,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Enable updates when we receive new data.
         let mut acc_should_update = false;
         let mut mag_should_update = false;
-        let mut _gyro_should_update = false;
+        let mut gyro_should_update = false;
 
         // Increment simulation index.
         while accel[accel_index].time < simulation_time.as_secs_f64() {
@@ -314,7 +316,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         while gyro[gyro_index].time < simulation_time.as_secs_f64() {
             gyro_index += 1;
-            _gyro_should_update = true;
+            gyro_should_update = true;
             if accel_index >= gyro.len() {
                 accel_index = 0;
                 gyro_index = 0;
@@ -342,6 +344,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Run a prediction.
         estimator.predict();
+        gyro_x_estimator.predict(elapsed_time.as_secs_f32());
 
         let estimated_angles = estimator.estimated_angles();
         if estimated_angles.yaw_psi.is_nan()
@@ -357,6 +360,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         if mag_should_update {
             estimator.correct_magnetometer(&compass_meas.reading);
+        }
+        if gyro_should_update {
+            gyro_x_estimator.correct(gyro_meas.reading.omega_x);
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -553,10 +559,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display gyro roll rates.
+        let estimated_omega_x = gyro_x_estimator.angular_velocity();
+        let estimated_x_bias = gyro_x_estimator.bias();
         let info = format!(
-            "ωx = {:+0.02} rad/s ({:+0.02}°/s)",
+            "ωx = {:+0.02} rad/s ({:+0.02}°/s) - {:+0.02} rad/s ± {:+0.02}rad/s",
             gyro_meas.omega_x,
-            gyro_meas.omega_x * 180.0 / std::f32::consts::PI
+            gyro_meas.omega_x * 180.0 / std::f32::consts::PI,
+            estimated_omega_x,
+            estimated_x_bias
         );
         window.draw_text(
             &info,

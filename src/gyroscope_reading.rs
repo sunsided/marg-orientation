@@ -1,4 +1,4 @@
-use crate::{impl_standard_traits, MagnetometerReading};
+use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Mul, Sub};
 
