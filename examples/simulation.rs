@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 
 use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
-use marg_orientation::{
+use marg_orientation::types::{
     AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
     MagnetometerReading,
 };
@@ -432,9 +432,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Obtain a rotation matrix from the estimated angles.
-        let north = estimator.rotate_vector_world(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
-        let east = estimator.rotate_vector_world(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
-        let down = estimator.rotate_vector_world(marg_orientation::Vector3::new(0.0, 0.0, 1.0));
+        let north =
+            estimator.rotate_vector_world(marg_orientation::types::Vector3::new(1.0, 0.0, 0.0));
+        let east =
+            estimator.rotate_vector_world(marg_orientation::types::Vector3::new(0.0, 1.0, 0.0));
+        let down =
+            estimator.rotate_vector_world(marg_orientation::types::Vector3::new(0.0, 0.0, 1.0));
         let filter_x = kiss3d_point(NorthEastDown::new(north.x, north.y, north.z));
         let filter_y = kiss3d_point(NorthEastDown::new(east.x, east.y, east.z));
         let filter_z = kiss3d_point(NorthEastDown::new(down.x, down.y, down.z));

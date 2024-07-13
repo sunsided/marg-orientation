@@ -1,5 +1,4 @@
-use crate::accelerometer_reading::AccelerometerReading;
-use crate::magnetometer_reading::MagnetometerReading;
+use crate::types::{AccelerometerReading, MagnetometerReading};
 use core::borrow::Borrow;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Add, Mul, Neg, Sub};

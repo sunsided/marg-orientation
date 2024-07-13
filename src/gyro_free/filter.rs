@@ -1,9 +1,10 @@
 use crate::gyro_free::types::*;
-use crate::vector3::Vector3;
-use crate::{
-    Abs, AccelerometerNoise, AccelerometerReading, ArcSin, ArcTan, EulerAngles, IsNaN,
-    MagnetometerNoise, MagnetometerReading, NormalizeAngle,
+use crate::prelude::*;
+use crate::types::{
+    AccelerometerNoise, AccelerometerReading, EulerAngles, MagnetometerNoise, MagnetometerReading,
+    Vector3,
 };
+use crate::IsNaN;
 use minikalman::buffers::types::*;
 use minikalman::extended::{ExtendedKalmanBuilder, ExtendedObservationBuilder};
 use minikalman::matrix::MatrixDataType;

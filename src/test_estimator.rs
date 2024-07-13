@@ -1,8 +1,7 @@
-use crate::vector3::Vector3;
-use crate::{
-    AccelerometerNoise, AccelerometerReading, ArcSin, ArcTan, DetectGimbalLock, EulerAngles,
-    GyroscopeBias, GyroscopeNoise, GyroscopeReading, IsNaN, MagnetometerNoise, MagnetometerReading,
-    NormalizeAngle,
+use crate::prelude::*;
+use crate::types::{
+    AccelerometerNoise, AccelerometerReading, EulerAngles, GyroscopeBias, GyroscopeNoise,
+    GyroscopeReading, MagnetometerNoise, MagnetometerReading,
 };
 use core::ops::Neg;
 use minikalman::buffers::types::*;
