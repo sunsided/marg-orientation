@@ -1,7 +1,7 @@
 [package]
 name = "marg-orientation"
 description = "A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator"
-version = "0.0.1"
+version = "0.1.0-alpha.2"
 authors = ["Markus Mayer"]
 homepage = "https://github.com/sunsided/marg-orientation"
 repository = "https://github.com/sunsided/marg-orientation"
