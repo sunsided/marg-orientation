@@ -241,27 +241,27 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType,
     {
         self.filter.state_vector_mut().apply(|vec| {
-            let a = vec.get_row(0);
-            let b = vec.get_row(1);
-            let c = vec.get_row(2);
-            let d = vec.get_row(3);
+            let w = vec.get_row(0);
+            let x = vec.get_row(1);
+            let y = vec.get_row(2);
+            let z = vec.get_row(3);
 
-            let (a, b, c, d) = if a < T::zero() {
-                (-a, -b, -c, -d)
+            let (w, x, y, z) = if w >= T::zero() {
+                (w, x, y, z)
             } else {
-                (a, b, c, d)
+                (-w, -x, -y, -z)
             };
 
-            let norm_sq = a * a + b * b + c * c + d * d;
+            let norm_sq = w * w + x * x + y * y + z * z;
             let norm = norm_sq.square_root();
-            let a = a / norm;
-            let b = b / norm;
-            let c = c / norm;
-            let d = d / norm;
-            vec.set_row(0, a);
-            vec.set_row(1, b);
-            vec.set_row(2, c);
-            vec.set_row(3, d);
+            let w = w / norm;
+            let x = x / norm;
+            let y = y / norm;
+            let z = z / norm;
+            vec.set_row(0, w);
+            vec.set_row(1, x);
+            vec.set_row(2, y);
+            vec.set_row(3, z);
         });
     }
 
