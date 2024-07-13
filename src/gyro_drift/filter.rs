@@ -3,7 +3,7 @@ use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
 use minikalman::regular::{RegularKalmanBuilder, RegularObservationBuilder};
 
-use crate::gyro::types::*;
+use crate::gyro_drift::types::*;
 
 /// An estimator for gyroscope axis-specific angular velocity and bias.
 pub struct GyroscopeAxisEstimator<T> {
@@ -18,11 +18,7 @@ impl<T> GyroscopeAxisEstimator<T> {
     /// * `drift_estimate` - The initial estimate for the axis drift value.
     /// * `gyro_noise` - The gyroscope noise values (sigma-squared) for the axis.
     /// * `process_noise` - A process noise value.
-    pub fn new(
-        drift_estimate: T,
-        gyro_noise: T,
-        process_noise: T,
-    ) -> Self
+    pub fn new(drift_estimate: T, gyro_noise: T, process_noise: T) -> Self
     where
         T: MatrixDataType + Default,
     {
@@ -65,7 +61,7 @@ impl<T> GyroscopeAxisEstimator<T> {
     /// Gets the estimated angular velocity.
     pub fn angular_velocity(&self) -> T
     where
-        T: Copy
+        T: Copy,
     {
         self.filter.state_vector().get_row(0)
     }
@@ -73,7 +69,7 @@ impl<T> GyroscopeAxisEstimator<T> {
     /// Gets the estimated bias term.
     pub fn bias(&self) -> T
     where
-        T: Copy
+        T: Copy,
     {
         self.filter.state_vector().get_row(1)
     }
@@ -81,7 +77,11 @@ impl<T> GyroscopeAxisEstimator<T> {
 
 impl<T> GyroscopeAxisEstimator<T> {
     /// Builds the Kalman filter used for prediction.
-    fn build_filter(drift_estimate: T, sensor_noise: T, process_noise_value: T) -> OwnedKalmanFilter<T>
+    fn build_filter(
+        drift_estimate: T,
+        sensor_noise: T,
+        process_noise_value: T,
+    ) -> OwnedKalmanFilter<T>
     where
         T: MatrixDataType + Default,
     {
@@ -160,9 +160,7 @@ impl<T> GyroscopeAxisEstimator<T> {
     }
 
     /// Builds the Kalman filter observation used for the prediction.
-    fn build_measurement(
-        axis_noise: T,
-    ) -> OwnedObservation<T>
+    fn build_measurement(axis_noise: T) -> OwnedObservation<T>
     where
         T: MatrixDataType + Default,
     {
@@ -175,20 +173,18 @@ impl<T> GyroscopeAxisEstimator<T> {
                 1,
                 OBSERVATIONS,
                 T,
-            >(
-                [zero; OBSERVATIONS]
-            ));
+            >([zero; OBSERVATIONS]));
 
         // Observation matrix
         let mut observation_matrix =
-            ObservationMatrixMutBuffer::<OBSERVATIONS, STATES, T, _>::new(
-                MatrixData::new_array::<
-                    OBSERVATIONS,
-                    STATES,
-                    { OBSERVATIONS * STATES },
-                    T,
-                >([zero; { OBSERVATIONS * STATES }]),
-            );
+            ObservationMatrixMutBuffer::<OBSERVATIONS, STATES, T, _>::new(MatrixData::new_array::<
+                OBSERVATIONS,
+                STATES,
+                { OBSERVATIONS * STATES },
+                T,
+            >(
+                [zero; { OBSERVATIONS * STATES }],
+            ));
         observation_matrix.apply(|mat| {
             mat.set_col(0, T::one());
             mat.set_col(1, T::zero());
@@ -215,52 +211,58 @@ impl<T> GyroscopeAxisEstimator<T> {
                 1,
                 OBSERVATIONS,
                 T,
-            >(
-                [zero; OBSERVATIONS]
-            ));
+            >([zero; OBSERVATIONS]));
 
         // Innovation covariance matrix
         let innovation_covariance =
-            InnovationCovarianceMatrixBuffer::<OBSERVATIONS, T, _>::new(
-                MatrixData::new_array::<
-                    OBSERVATIONS,
-                    OBSERVATIONS,
-                    { OBSERVATIONS * OBSERVATIONS },
-                    T,
-                >([zero; { OBSERVATIONS * OBSERVATIONS }]),
-            );
+            InnovationCovarianceMatrixBuffer::<OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                OBSERVATIONS,
+                OBSERVATIONS,
+                { OBSERVATIONS * OBSERVATIONS },
+                T,
+            >(
+                [zero; { OBSERVATIONS * OBSERVATIONS }],
+            ));
 
         // Kalman Gain matrix
-        let kalman_gain = KalmanGainMatrixBuffer::<STATES, OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, OBSERVATIONS, { STATES * OBSERVATIONS }, T>(
+        let kalman_gain =
+            KalmanGainMatrixBuffer::<STATES, OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                STATES,
+                OBSERVATIONS,
+                { STATES * OBSERVATIONS },
+                T,
+            >(
                 [zero; { STATES * OBSERVATIONS }],
-            ),
-        );
+            ));
 
         // Temporary residual covariance inverted matrix
-        let temp_sinv =
-            TemporaryResidualCovarianceInvertedMatrixBuffer::<OBSERVATIONS, T, _>::new(
-                MatrixData::new_array::<
-                    OBSERVATIONS,
-                    OBSERVATIONS,
-                    { OBSERVATIONS * OBSERVATIONS },
-                    T,
-                >([zero; { OBSERVATIONS * OBSERVATIONS }]),
-            );
+        let temp_sinv = TemporaryResidualCovarianceInvertedMatrixBuffer::<OBSERVATIONS, T, _>::new(
+            MatrixData::new_array::<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>(
+                [zero; { OBSERVATIONS * OBSERVATIONS }],
+            ),
+        );
 
         // Temporary H×P matrix
-        let temp_hp = TemporaryHPMatrixBuffer::<OBSERVATIONS, STATES, T, _>::new(
-            MatrixData::new_array::<OBSERVATIONS, STATES, { OBSERVATIONS * STATES }, T>(
+        let temp_hp =
+            TemporaryHPMatrixBuffer::<OBSERVATIONS, STATES, T, _>::new(MatrixData::new_array::<
+                OBSERVATIONS,
+                STATES,
+                { OBSERVATIONS * STATES },
+                T,
+            >(
                 [zero; { OBSERVATIONS * STATES }],
-            ),
-        );
+            ));
 
         // Temporary P×Hᵀ matrix
-        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, OBSERVATIONS, { STATES * OBSERVATIONS }, T>(
+        let temp_pht =
+            TemporaryPHTMatrixBuffer::<STATES, OBSERVATIONS, T, _>::new(MatrixData::new_array::<
+                STATES,
+                OBSERVATIONS,
+                { STATES * OBSERVATIONS },
+                T,
+            >(
                 [zero; { STATES * OBSERVATIONS }],
-            ),
-        );
+            ));
 
         // Temporary K×(H×P) matrix
         let temp_khp = TemporaryKHPMatrixBuffer::<STATES, T, _>::new(MatrixData::new_array::<

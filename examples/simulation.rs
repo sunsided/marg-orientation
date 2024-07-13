@@ -21,8 +21,8 @@ const DISPLAY_ESTIMATIONS: bool = true;
 const DISPLAY_RAW_ACCEL: bool = true;
 const DISPLAY_RAW_MAG: bool = true;
 
-const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
+const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
 // const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
 
 /// Kiss3d uses a West, Up, North system by default.
@@ -259,7 +259,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         1e-6,
     );
 
-    let mut gyro_x_estimator = marg_orientation::gyro::GyroscopeAxisEstimator::<f32>::new(0.00003, 5.0, 0.001);
+    let mut gyro_x_estimator =
+        marg_orientation::gyro_drift::GyroscopeAxisEstimator::<f32>::new(0.00003, 5.0, 0.001);
 
     // Prepare some basics for the simulation.
     let font = Font::new(Path::new(

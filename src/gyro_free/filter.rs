@@ -77,7 +77,7 @@ impl<T> OwnedOrientationEstimator<T> {
     /// Performs a prediction step to obtain new orientation estimates.
     pub fn predict(&mut self)
     where
-        T: MatrixDataType + Default + NormalizeAngle<T, Output = T> + IsNaN,
+        T: MatrixDataType + IsNaN,
     {
         // Perform a regular Kalman Filter prediction step.
         self.filter
@@ -91,7 +91,7 @@ impl<T> OwnedOrientationEstimator<T> {
     /// * `accelerometer` - The accelerometer reading.
     pub fn correct_accelerometer(&mut self, accelerometer: &AccelerometerReading<T>)
     where
-        T: MatrixDataType + core::fmt::Debug + IsNaN,
+        T: MatrixDataType + IsNaN,
     {
         // Normalize the vectors.
         let a = Vector3::from(accelerometer).normalized();
@@ -102,10 +102,17 @@ impl<T> OwnedOrientationEstimator<T> {
         });
 
         // Update the Jacobian.
+        let two = T::one() + T::one();
         let (q0, q1, q2, q3) = self.estimated_quaternion();
+
         self.acc_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
+                let q0 = q0 * two;
+                let q1 = q1 * two;
+                let q2 = q2 * two;
+                let q3 = q3 * two;
+
                 mat.set_at(0, 0, q2);
                 mat.set_at(0, 1, -q3);
                 mat.set_at(0, 2, q0);
@@ -123,8 +130,6 @@ impl<T> OwnedOrientationEstimator<T> {
             });
 
         // Perform the update step.
-        let two = T::one() + T::one();
-        let (q0, q1, q2, q3) = self.estimated_quaternion();
         self.filter
             .correct_nonlinear(&mut self.acc_measurement, |state, measurement| {
                 // let down = Vector3::new(T::zero(), T::zero(), T::one());
@@ -148,11 +153,11 @@ impl<T> OwnedOrientationEstimator<T> {
     /// * `magnetometer` - The magnetometer reading.
     pub fn correct_magnetometer(&mut self, magnetometer: &MagnetometerReading<T>)
     where
-        T: MatrixDataType + core::fmt::Debug + IsNaN,
+        T: MatrixDataType + IsNaN,
     {
         // Normalize the vector.
-        let m = Vector3::from(magnetometer).normalized();
         self.mag_measurement.measurement_vector_mut().apply(|vec| {
+            let m = Vector3::from(magnetometer).normalized();
             vec.set_row(0, m.x);
             vec.set_row(1, m.y);
             vec.set_row(2, m.z);
@@ -201,7 +206,7 @@ impl<T> OwnedOrientationEstimator<T> {
 
     fn rotate_vector(state: &StateVectorBufferOwnedType<STATES, T>, vec: &Vector3<T>) -> Vector3<T>
     where
-        T: Copy + One<Output = T> + Add<T, Output = T> + Mul<T, Output = T> + Sub<T, Output = T>,
+        T: MatrixDataType,
     {
         let q0 = state.get_row(0);
         let q1 = state.get_row(1);
@@ -534,25 +539,22 @@ impl<T> OwnedOrientationEstimator<T> {
             ));
 
         // Innovation covariance matrix
-        let innovation_covariance = InnovationCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<
-                VEC3_OBSERVATIONS,
-                VEC3_OBSERVATIONS,
-                { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
-                T,
-            >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
-        );
+        let innovation_covariance =
+            InnovationCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
+                MatrixData::new_array::<
+                    VEC3_OBSERVATIONS,
+                    VEC3_OBSERVATIONS,
+                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
+                    T,
+                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
+            );
 
         // Kalman Gain matrix
-        let kalman_gain =
-            KalmanGainMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                STATES,
-                VEC3_OBSERVATIONS,
-                { STATES * VEC3_OBSERVATIONS },
-                T,
-            >(
+        let kalman_gain = KalmanGainMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
+            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
                 [zero; { STATES * VEC3_OBSERVATIONS }],
-            ));
+            ),
+        );
 
         // Temporary residual covariance inverted matrix
         let temp_sinv =
@@ -626,12 +628,9 @@ impl<T> OwnedOrientationEstimator<T> {
         // Observation matrix
         let mut observation_matrix =
             ObservationMatrixMutBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
-                MatrixData::new_array::<
-                    VEC3_OBSERVATIONS,
-                    STATES,
-                    { VEC3_OBSERVATIONS * STATES },
-                    T,
-                >([zero; { VEC3_OBSERVATIONS * STATES }]),
+                MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
+                    [zero; { VEC3_OBSERVATIONS * STATES }],
+                ),
             );
         observation_matrix.set_all(T::zero());
 
