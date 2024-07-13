@@ -1,5 +1,6 @@
 use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
 use csv::ReaderBuilder;
+use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{
     Matrix3, Point2, Point3, Rotation3, Scalar, Translation3, UnitQuaternion, Vector3,
@@ -277,7 +278,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut window = Window::new("MPU6050 and HMC8533L simulation");
     window.set_framerate_limit(Some(30));
-    window.set_background_color(0.118, 0.122, 0.149);
     window.set_light(Light::StickToCamera);
 
     // Create a box at the coordinate origin.
@@ -302,12 +302,29 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
+    let mut is_paused = false;
+
     while window.render() {
         // Obtain the current render timestamp.
         let now = Instant::now();
         let elapsed_time = now - last_time;
-        simulation_time += elapsed_time;
         last_time = now;
+
+        // Handle window events to check for key presses
+        for event in window.events().iter() {
+            if let WindowEvent::Key(key, Action::Press, _) = event.value {
+                if key == Key::Space {
+                    is_paused = !is_paused;
+                }
+            }
+        }
+
+        if !is_paused {
+            simulation_time += elapsed_time;
+            window.set_background_color(0.118, 0.122, 0.149);
+        } else {
+            window.set_background_color(0.149, 0.122, 0.118);
+        }
 
         // Enable updates when we receive new data.
         let mut acc_should_update = false;
@@ -315,34 +332,36 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut gyro_should_update = false;
 
         // Increment simulation index.
-        while accel[accel_index].time < simulation_time.as_secs_f64() {
-            accel_index += 1;
-            acc_should_update = true;
-            if accel_index >= gyro.len() {
-                accel_index = 0;
-                gyro_index = 0;
-                compass_index = 0;
-                simulation_time = Duration::default();
+        if !is_paused {
+            while accel[accel_index].time < simulation_time.as_secs_f64() {
+                accel_index += 1;
+                acc_should_update = true;
+                if accel_index >= gyro.len() {
+                    accel_index = 0;
+                    gyro_index = 0;
+                    compass_index = 0;
+                    simulation_time = Duration::default();
+                }
             }
-        }
-        while gyro[gyro_index].time < simulation_time.as_secs_f64() {
-            gyro_index += 1;
-            gyro_should_update = true;
-            if accel_index >= gyro.len() {
-                accel_index = 0;
-                gyro_index = 0;
-                compass_index = 0;
-                simulation_time = Duration::default();
+            while gyro[gyro_index].time < simulation_time.as_secs_f64() {
+                gyro_index += 1;
+                gyro_should_update = true;
+                if accel_index >= gyro.len() {
+                    accel_index = 0;
+                    gyro_index = 0;
+                    compass_index = 0;
+                    simulation_time = Duration::default();
+                }
             }
-        }
-        while compass[compass_index].time < simulation_time.as_secs_f64() {
-            compass_index += 1;
-            mag_should_update = true;
-            if compass_index >= compass.len() {
-                accel_index = 0;
-                gyro_index = 0;
-                compass_index = 0;
-                simulation_time = Duration::default();
+            while compass[compass_index].time < simulation_time.as_secs_f64() {
+                compass_index += 1;
+                mag_should_update = true;
+                if compass_index >= compass.len() {
+                    accel_index = 0;
+                    gyro_index = 0;
+                    compass_index = 0;
+                    simulation_time = Duration::default();
+                }
             }
         }
 
@@ -367,8 +386,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         // Run a prediction.
-        estimator.predict();
-        gyro_x_estimator.predict(elapsed_time.as_secs_f32());
+        if !is_paused {
+            estimator.predict();
+            gyro_x_estimator.predict(elapsed_time.as_secs_f32());
+        }
 
         let estimated_angles = estimator.estimated_angles();
         if estimated_angles.yaw_psi.is_nan()
