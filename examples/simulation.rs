@@ -22,14 +22,15 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-const DISPLAY_REFERENCE: bool = false;
+const DISPLAY_REFERENCE: bool = true;
 const DISPLAY_ESTIMATIONS: bool = false;
 const DISPLAY_RAW_ACCEL: bool = true;
 const DISPLAY_RAW_MAG: bool = true;
 
 // const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
-const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
 // const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
+const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-nose-up";
 
 /// Kiss3d uses a West, Up, North system by default.
 type Kiss3DCoordinates<T> = WestUpNorth<T>;
@@ -277,63 +278,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut window = Window::new("MPU6050 and HMC8533L simulation");
     window.set_framerate_limit(Some(30));
     window.set_background_color(0.118, 0.122, 0.149);
+    window.set_light(Light::StickToCamera);
 
+    // Create a box at the coordinate origin.
     let mut c = window.add_cube(0.02, 0.02, 0.02);
     c.set_color(1.0, 1.0, 1.0);
 
-    window.set_light(Light::StickToCamera);
-
-    // Define the vertices for the arrow, based on a rectangle (shaft) and triangles (head).
-    let arrow_vertices = vec![
-        // Rectangle vertices (shaft) on x-z plane, half as long
-        Point3::new(-0.20, 0.0, -0.05), // Bottom-left
-        Point3::new(0.10, 0.0, -0.05),  // Bottom-right
-        Point3::new(0.10, 0.0, 0.05),   // Top-right
-        Point3::new(-0.20, 0.0, 0.05),  // Top-left
-        // Triangle vertices (head) on x-z plane, half as long
-        Point3::new(0.10, 0.0, -0.1), // Bottom
-        Point3::new(0.30, 0.0, 0.0),  // Tip
-        Point3::new(0.10, 0.0, 0.1),  // Top
-    ];
-
-    // Define the indices for the arrow.
-    let arrow_indices = vec![
-        // Rectangle (shaft)
-        Point3::new(0u16, 1, 2),
-        Point3::new(0, 2, 3),
-        // Triangle (head)
-        Point3::new(4, 5, 6),
-    ];
-
-    // Create the mesh from vertices and indices
-    let arrow_mesh = Mesh::new(arrow_vertices, arrow_indices, None, None, false);
-    let arrow_mesh = Rc::new(RefCell::new(arrow_mesh));
-
-    // Add the mesh to the window
-    let mut arrows = window.add_group();
-    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
-    top_arrow.set_color(0.8, 0.165, 0.212);
-    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
-
-    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
-    top_arrow.set_color(0.545, 0.114, 0.145);
-    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
-    top_arrow.set_local_rotation(UnitQuaternion::from_axis_angle(
-        &Vector3::x_axis(),
-        std::f32::consts::PI,
-    ));
-
-    let mut bottom_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
-    bottom_arrow.set_color(1.0, 1.0, 1.0);
-    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
-
-    let mut bottom_arrow = arrows.add_mesh(arrow_mesh, Vector3::new(1.0, 1.0, 1.0));
-    bottom_arrow.set_color(1.0, 1.0, 1.0);
-    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
-    bottom_arrow.set_local_rotation(UnitQuaternion::from_axis_angle(
-        &Vector3::x_axis(),
-        std::f32::consts::PI,
-    ));
+    // Create the arrow indicating orientation.
+    let mut arrows = create_arrow(&mut window);
 
     // Some colors.
     let red = Point3::new(1.0, 0.0, 0.0);
@@ -456,40 +408,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Update the arrow according to the estimations.
         update_arrow_orientation(&mut arrows, filter_x, filter_y, filter_z);
 
-        // Display elapsed time since last frame.
-        let info = format!(
-            "ΔT = {:.4} s ({:.2}) Hz",
-            elapsed_time.as_secs_f32(),
-            elapsed_time.as_secs_f32().recip()
-        );
-        window.draw_text(
-            &info,
-            &Point2::new(0.0, 0.0),
-            32.0,
-            &font,
-            &Point3::new(1.0, 1.0, 1.0),
-        );
-
-        // Display simulation time.
-        let info = format!(" t = {:.2} s", simulation_time.as_secs_f32());
-        window.draw_text(
-            &info,
-            &Point2::new(0.0, 32.0),
-            32.0,
-            &font,
-            &Point3::new(1.0, 1.0, 1.0),
-        );
-
-        // Display simulation indexes.
-        let info = format!("tm = {:.2} s (#{})", gyro[accel_index].time, accel_index);
-        window.draw_text(
-            &info,
-            &Point2::new(0.0, 64.0),
-            32.0,
-            &font,
-            &Point3::new(1.0, 1.0, 1.0),
-        );
-
         // Display default coordinate system.
         #[allow(dead_code)]
         if DISPLAY_REFERENCE {
@@ -527,17 +445,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             window.draw_line(&p1, &kiss3d_point(mm), &Point3::new(1.0, 0.0, 0.5));
         }
 
-        // Display simulation indexes.
-        let info = format!(
-            "th = {:.2} s (#{})",
-            compass[compass_index].time, compass_index
-        );
-        window.draw_text(
-            &info,
-            &Point2::new(0.0, 92.0),
-            32.0,
+        display_times_and_indexes(
+            &gyro,
+            &compass,
+            &accel,
             &font,
-            &Point3::new(1.0, 1.0, 1.0),
+            &mut window,
+            accel_index,
+            compass_index,
+            gyro_index,
+            simulation_time,
+            elapsed_time,
         );
 
         // Display angle between measured accelerometer and magnetometer.
@@ -713,6 +631,133 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn display_times_and_indexes(
+    gyro: &[Timed<GyroscopeReading<f32>>],
+    compass: &[Timed<MagnetometerReading<f32>>],
+    accel: &[Timed<AccelerometerReading<f32>>],
+    font: &Rc<Font>,
+    window: &mut Window,
+    accel_index: usize,
+    compass_index: usize,
+    gyro_index: usize,
+    simulation_time: Duration,
+    elapsed_time: Duration,
+) {
+    // Display elapsed time since last frame.
+    let info = format!(
+        "ΔT = {:.4} s ({:.2}) Hz",
+        elapsed_time.as_secs_f32(),
+        elapsed_time.as_secs_f32().recip()
+    );
+    window.draw_text(
+        &info,
+        &Point2::new(0.0, 0.0),
+        32.0,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0),
+    );
+
+    // Display simulation time.
+    let info = format!(" t = {:.2} s", simulation_time.as_secs_f32());
+    window.draw_text(
+        &info,
+        &Point2::new(0.0, 32.0),
+        32.0,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0),
+    );
+
+    // Display simulation indexes.
+    let info = format!("ta = {:.2} s (#{})", accel[accel_index].time, accel_index);
+    window.draw_text(
+        &info,
+        &Point2::new(0.0, 32.0 + 32.0),
+        32.0,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0),
+    );
+
+    // Display simulation indexes.
+    let info = format!(
+        "tm = {:.2} s (#{})",
+        compass[compass_index].time, compass_index
+    );
+    window.draw_text(
+        &info,
+        &Point2::new(0.0, 32.0 + 2.0 * 32.0),
+        32.0,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0),
+    );
+
+    // Display simulation indexes.
+    let info = format!("tg = {:.2} s (#{})", gyro[gyro_index].time, gyro_index);
+    window.draw_text(
+        &info,
+        &Point2::new(0.0, 32.0 + 3.0 * 32.0),
+        32.0,
+        &font,
+        &Point3::new(1.0, 1.0, 1.0),
+    );
+}
+
+fn create_arrow(window: &mut Window) -> SceneNode {
+    // Define the vertices for the arrow, based on a rectangle (shaft) and triangles (head).
+    let arrow_vertices = vec![
+        // Rectangle vertices (shaft) on x-z plane, half as long
+        Point3::new(-0.20, 0.0, -0.05), // Bottom-left
+        Point3::new(0.10, 0.0, -0.05),  // Bottom-right
+        Point3::new(0.10, 0.0, 0.05),   // Top-right
+        Point3::new(-0.20, 0.0, 0.05),  // Top-left
+        // Triangle vertices (head) on x-z plane, half as long
+        Point3::new(0.10, 0.0, -0.1), // Bottom
+        Point3::new(0.30, 0.0, 0.0),  // Tip
+        Point3::new(0.10, 0.0, 0.1),  // Top
+    ];
+
+    // Define the indices for the arrow.
+    let arrow_indices = vec![
+        // Rectangle (shaft)
+        Point3::new(0u16, 1, 2),
+        Point3::new(0, 2, 3),
+        // Triangle (head)
+        Point3::new(4, 5, 6),
+    ];
+
+    // Create the mesh from vertices and indices
+    let arrow_mesh = Mesh::new(arrow_vertices, arrow_indices, None, None, false);
+    let arrow_mesh = Rc::new(RefCell::new(arrow_mesh));
+
+    // Quaternion to flip the arrow around once.
+    let flip_quaternion = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), std::f32::consts::PI);
+
+    // Add the mesh to the window
+    let mut arrows = window.add_group();
+
+    // The top-side of the arrow (red).
+    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    top_arrow.set_color(0.8, 0.165, 0.212);
+    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
+
+    // Flipped version to work around backface culling.
+    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    top_arrow.set_color(0.545, 0.114, 0.145);
+    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
+    top_arrow.set_local_rotation(flip_quaternion);
+
+    // The bottom-side of the arrow (white).
+    let mut bottom_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    bottom_arrow.set_color(1.0, 1.0, 1.0);
+    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
+
+    // Flipped version to work around backface culling.
+    let mut bottom_arrow = arrows.add_mesh(arrow_mesh, Vector3::new(1.0, 1.0, 1.0));
+    bottom_arrow.set_color(1.0, 1.0, 1.0);
+    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
+    bottom_arrow.set_local_rotation(flip_quaternion);
+    arrows
 }
 
 fn calculate_angle_acc_mag(
