@@ -373,7 +373,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             estimator.correct_accelerometer(&accel_meas.reading);
         }
         if mag_should_update {
-            // estimator.correct_magnetometer(&compass_meas.reading);
+            estimator.correct_magnetometer(&compass_meas.reading);
         }
         if gyro_should_update {
             gyro_x_estimator.correct(gyro_meas.reading.omega_x);

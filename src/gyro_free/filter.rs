@@ -117,9 +117,9 @@ impl<T> OwnedOrientationEstimator<T> {
                 let two_q3 = q3 * two;
 
                 mat.set_at(0, 0, two_q2);
-                mat.set_at(0, 1, -two_q3);
+                mat.set_at(0, 1, two_q3);
                 mat.set_at(0, 2, two_q0);
-                mat.set_at(0, 3, -two_q1);
+                mat.set_at(0, 3, two_q1);
 
                 mat.set_at(1, 0, -two_q1);
                 mat.set_at(1, 1, -two_q0);
@@ -171,26 +171,27 @@ impl<T> OwnedOrientationEstimator<T> {
         self.mag_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
-                mat.set_at(0, 0, two * (mz * q2 - my * q3));
-                mat.set_at(0, 1, two * (mz * q3 + my * q2));
-                mat.set_at(0, 2, two * (mz * q0 + my * q1));
-                mat.set_at(0, 3, two * (mz * q1 - my * q0));
+                mat.set_at(0, 0, two * (q0 * mx - q3 * my + q2 * mz));
+                mat.set_at(0, 1, two * (q1 * mx + q2 * my + q3 * mz));
+                mat.set_at(0, 2, two * (q1 * my - q2 * mx + q0 * mz));
+                mat.set_at(0, 3, two * (q1 * mz - q0 * my - q3 * mx));
 
-                mat.set_at(1, 0, two * (mx * q3 - mz * q1));
-                mat.set_at(1, 1, two * (mx * q2 + mz * q0));
-                mat.set_at(1, 2, two * (mx * q1 - mz * q3));
-                mat.set_at(1, 3, two * (mx * q0 + mz * q2));
+                mat.set_at(1, 0, two * (q3 * mx + q0 * my - q1 * mz));
+                mat.set_at(1, 1, two * (q2 * mx - q1 * my - q0 * mz));
+                mat.set_at(1, 2, two * (q1 * mx + q2 * my + q3 * mz));
+                mat.set_at(1, 3, two * (q0 * mx - q3 * my + q2 * mz));
 
-                mat.set_at(2, 0, two * (my * q1 - mx * q2));
-                mat.set_at(2, 1, two * (my * q0 - mx * q3));
-                mat.set_at(2, 2, two * (my * q3 + mx * q0));
-                mat.set_at(2, 3, two * (my * q2 + mx * q1));
+                mat.set_at(2, 0, two * (q1 * my - q2 * mx + q0 * mz));
+                mat.set_at(2, 1, two * (q3*mx + q0*my - q1*mz));
+                mat.set_at(2, 2, two * (q3*my - q0*mx - q2*mz));
+                mat.set_at(2, 3, two * (q1*mx + q2*my + q3*mz));
             });
 
         // Perform the update step.
         self.filter
             .correct_nonlinear(&mut self.mag_measurement, |state, measurement| {
-                let rotated = Self::rotate_vector_internal(state, self.magnetic_field_ref);
+                let reference = self.magnetic_field_ref;
+                let rotated = Self::rotate_vector_internal(state, reference);
                 measurement.set_row(0, rotated.x);
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
