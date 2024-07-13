@@ -1,7 +1,11 @@
 use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
 use csv::ReaderBuilder;
 use kiss3d::light::Light;
-use kiss3d::nalgebra::{Point2, Point3, Rotation3, Scalar, Vector3};
+use kiss3d::nalgebra::{
+    Matrix3, Point2, Point3, Rotation3, Scalar, Translation3, UnitQuaternion, Vector3,
+};
+use kiss3d::resource::Mesh;
+use kiss3d::scene::SceneNode;
 use kiss3d::text::Font;
 use kiss3d::window::Window;
 use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
@@ -11,13 +15,15 @@ use marg_orientation::{
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::cell::RefCell;
 use std::error::Error;
 use std::ops::Deref;
 use std::path::Path;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-const DISPLAY_REFERENCE: bool = true;
-const DISPLAY_ESTIMATIONS: bool = true;
+const DISPLAY_REFERENCE: bool = false;
+const DISPLAY_ESTIMATIONS: bool = false;
 const DISPLAY_RAW_ACCEL: bool = true;
 const DISPLAY_RAW_MAG: bool = true;
 
@@ -270,12 +276,64 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut window = Window::new("MPU6050 and HMC8533L simulation");
     window.set_framerate_limit(Some(30));
-    window.set_background_color(0.2, 0.2, 0.2);
+    window.set_background_color(0.118, 0.122, 0.149);
 
     let mut c = window.add_cube(0.02, 0.02, 0.02);
     c.set_color(1.0, 1.0, 1.0);
 
     window.set_light(Light::StickToCamera);
+
+    // Define the vertices for the arrow, based on a rectangle (shaft) and triangles (head).
+    let arrow_vertices = vec![
+        // Rectangle vertices (shaft) on x-z plane, half as long
+        Point3::new(-0.20, 0.0, -0.05), // Bottom-left
+        Point3::new(0.10, 0.0, -0.05),  // Bottom-right
+        Point3::new(0.10, 0.0, 0.05),   // Top-right
+        Point3::new(-0.20, 0.0, 0.05),  // Top-left
+        // Triangle vertices (head) on x-z plane, half as long
+        Point3::new(0.10, 0.0, -0.1), // Bottom
+        Point3::new(0.30, 0.0, 0.0),  // Tip
+        Point3::new(0.10, 0.0, 0.1),  // Top
+    ];
+
+    // Define the indices for the arrow.
+    let arrow_indices = vec![
+        // Rectangle (shaft)
+        Point3::new(0u16, 1, 2),
+        Point3::new(0, 2, 3),
+        // Triangle (head)
+        Point3::new(4, 5, 6),
+    ];
+
+    // Create the mesh from vertices and indices
+    let arrow_mesh = Mesh::new(arrow_vertices, arrow_indices, None, None, false);
+    let arrow_mesh = Rc::new(RefCell::new(arrow_mesh));
+
+    // Add the mesh to the window
+    let mut arrows = window.add_group();
+    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    top_arrow.set_color(0.8, 0.165, 0.212);
+    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
+
+    let mut top_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    top_arrow.set_color(0.545, 0.114, 0.145);
+    top_arrow.set_local_translation(Translation3::new(0.0, -0.005, 0.0));
+    top_arrow.set_local_rotation(UnitQuaternion::from_axis_angle(
+        &Vector3::x_axis(),
+        std::f32::consts::PI,
+    ));
+
+    let mut bottom_arrow = arrows.add_mesh(arrow_mesh.clone(), Vector3::new(1.0, 1.0, 1.0));
+    bottom_arrow.set_color(1.0, 1.0, 1.0);
+    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
+
+    let mut bottom_arrow = arrows.add_mesh(arrow_mesh, Vector3::new(1.0, 1.0, 1.0));
+    bottom_arrow.set_color(1.0, 1.0, 1.0);
+    bottom_arrow.set_local_translation(Translation3::new(0.0, 0.005, 0.0));
+    bottom_arrow.set_local_rotation(UnitQuaternion::from_axis_angle(
+        &Vector3::x_axis(),
+        std::f32::consts::PI,
+    ));
 
     // Some colors.
     let red = Point3::new(1.0, 0.0, 0.0);
@@ -388,34 +446,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Obtain a rotation matrix from the estimated angles.
-        let estimated_angles = estimator.estimated_angles();
-        /*
-        let rotation = Rotation3::from_euler_angles(
-            estimated_angles.roll_phi,
-            estimated_angles.pitch_theta,
-            estimated_angles.yaw_psi,
-        );
-
-        let north = NorthEastDown::new(1.0, 0.0, 0.0);
-        let east = NorthEastDown::new(0.0, 1.0, 0.0);
-        let down = NorthEastDown::new(0.0, 0.0, 1.0);
-
-        let north = Point3::new(north.x(), north.y(), north.z());
-        let east = Point3::new(east.x(), east.y(), east.z());
-        let down = Point3::new(down.x(), down.y(), down.z());
-
-        let filter_x = Point3::from(rotation * north);
-        let filter_y = Point3::from(rotation * east);
-        let filter_z = Point3::from(rotation * down);
-        */
-
         let north = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
         let east = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
         let down = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 0.0, 1.0));
-
         let filter_x = kiss3d_point(NorthEastDown::new(north.x, north.y, north.z));
         let filter_y = kiss3d_point(NorthEastDown::new(east.x, east.y, east.z));
         let filter_z = kiss3d_point(NorthEastDown::new(down.x, down.y, down.z));
+
+        // Update the arrow according to the estimations.
+        update_arrow_orientation(&mut arrows, filter_x, filter_y, filter_z);
 
         // Display elapsed time since last frame.
         let info = format!(
@@ -466,10 +505,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Convert estimations.
         #[allow(dead_code)]
         if DISPLAY_ESTIMATIONS {
-            let ex = NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]);
-            let ey = NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]);
-            let ez = NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]);
-
             // Display estimated orientation.
             window.draw_line(&Point3::default(), &filter_x, &red);
             window.draw_line(&Point3::default(), &filter_y, &green);
@@ -719,4 +754,28 @@ where
 {
     let vector = vector.into();
     Point3::new(vector.x(), vector.y(), vector.z())
+}
+
+// Function to update the arrow's orientation based on new basis vectors
+fn update_arrow_orientation(
+    arrow: &mut SceneNode,
+    x_basis: Point3<f32>,
+    y_basis: Point3<f32>,
+    z_basis: Point3<f32>,
+) {
+    let x_basis = Vector3::new(x_basis[0], x_basis[1], x_basis[2]);
+    let y_basis = Vector3::new(y_basis[0], y_basis[1], y_basis[2]);
+    let z_basis = Vector3::new(z_basis[0], z_basis[1], z_basis[2]);
+
+    // Create a rotation matrix from the orthonormal basis vectors
+    let rotation_matrix = Matrix3::from_columns(&[x_basis, y_basis, z_basis]);
+
+    // Convert the rotation matrix to a UnitQuaternion
+    let rotation = UnitQuaternion::from_matrix(&rotation_matrix);
+    let flip = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), std::f32::consts::FRAC_PI_2);
+
+    let rotation = rotation * flip;
+
+    // Apply the rotation to the arrow
+    arrow.set_local_rotation(rotation);
 }
