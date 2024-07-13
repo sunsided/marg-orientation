@@ -196,11 +196,9 @@ impl<T> OwnedOrientationEstimator<T> {
         self.panic_if_nan();
     }
 
-    fn rotate_vector_internal(
-        state: &StateVectorBufferOwnedType<STATES, T>,
-        vec: Vector3<T>,
-    ) -> Vector3<T>
+    fn rotate_vector_internal<V>(state: &V, vec: Vector3<T>) -> Vector3<T>
     where
+        V: RowVectorMut<STATES, T>,
         T: MatrixDataType,
     {
         let q0 = state.get_row(0);
