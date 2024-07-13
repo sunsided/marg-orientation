@@ -238,6 +238,12 @@ where
     }
 }
 
+impl<T> From<Vector3<T>> for (T, T, T) {
+    fn from(value: Vector3<T>) -> Self {
+        (value.x, value.y, value.z)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

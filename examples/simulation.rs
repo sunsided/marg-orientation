@@ -373,7 +373,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             estimator.correct_accelerometer(&accel_meas.reading);
         }
         if mag_should_update {
-            estimator.correct_magnetometer(&compass_meas.reading);
+            // estimator.correct_magnetometer(&compass_meas.reading);
         }
         if gyro_should_update {
             gyro_x_estimator.correct(gyro_meas.reading.omega_x);
@@ -411,7 +411,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let north = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
         let east = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
-        let down = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 1.0));
+        let down = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 0.0, 1.0));
 
         let filter_x = kiss3d_point(NorthEastDown::new(north.x, north.y, north.z));
         let filter_y = kiss3d_point(NorthEastDown::new(east.x, east.y, east.z));

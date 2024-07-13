@@ -21,10 +21,6 @@ pub struct OwnedOrientationEstimator<T> {
     mag_measurement: OwnedVector3Observation<T>,
     /// Accelerometer measurements.
     acc_measurement: OwnedVector3Observation<T>,
-    /// The autocovariances of the noise terms.
-    accelerometer_noise: AccelerometerNoise<T>,
-    /// The autocovariances of the noise terms.
-    magnetometer_noise: MagnetometerNoise<T>,
     /// Magnetic field reference vector for the current location.
     magnetic_field_ref: Vector3<T>,
     /// A bias term to avoid divisions by zero.
@@ -65,8 +61,6 @@ impl<T> OwnedOrientationEstimator<T> {
             filter,
             mag_measurement,
             acc_measurement,
-            accelerometer_noise,
-            magnetometer_noise,
             magnetic_field_ref,
             epsilon,
         }
@@ -85,6 +79,18 @@ impl<T> OwnedOrientationEstimator<T> {
         self.panic_if_nan();
     }
 
+    fn apply_normalized_vector<V, M>(vec: V, measurement: &mut M)
+    where
+        M: RowVectorMut<3, T>,
+        V: Into<Vector3<T>>,
+        T: MatrixDataType,
+    {
+        let vec: Vector3<T> = vec.into().normalized();
+        measurement.set_row(0, vec.x);
+        measurement.set_row(1, vec.y);
+        measurement.set_row(2, vec.z);
+    }
+
     /// Performs a correction step using accelerometer and magnetometer readings.
     ///
     /// ## Arguments
@@ -94,11 +100,8 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType + IsNaN,
     {
         // Normalize the vectors.
-        let a = Vector3::from(accelerometer).normalized();
         self.acc_measurement.measurement_vector_mut().apply(|vec| {
-            vec.set_row(0, a.x);
-            vec.set_row(1, a.y);
-            vec.set_row(2, a.z);
+            Self::apply_normalized_vector(accelerometer, vec);
         });
 
         // Update the Jacobian.
@@ -108,38 +111,38 @@ impl<T> OwnedOrientationEstimator<T> {
         self.acc_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
-                let q0 = q0 * two;
-                let q1 = q1 * two;
-                let q2 = q2 * two;
-                let q3 = q3 * two;
+                let two_q0 = q0 * two;
+                let two_q1 = q1 * two;
+                let two_q2 = q2 * two;
+                let two_q3 = q3 * two;
 
-                mat.set_at(0, 0, q2);
-                mat.set_at(0, 1, -q3);
-                mat.set_at(0, 2, q0);
-                mat.set_at(0, 3, -q1);
+                mat.set_at(0, 0, two_q2);
+                mat.set_at(0, 1, -two_q3);
+                mat.set_at(0, 2, two_q0);
+                mat.set_at(0, 3, -two_q1);
 
-                mat.set_at(1, 0, -q1);
-                mat.set_at(1, 1, -q0);
-                mat.set_at(1, 2, q3);
-                mat.set_at(1, 3, q2);
+                mat.set_at(1, 0, -two_q1);
+                mat.set_at(1, 1, -two_q0);
+                mat.set_at(1, 2, two_q3);
+                mat.set_at(1, 3, two_q2);
 
-                mat.set_at(2, 0, q0);
-                mat.set_at(2, 1, -q1);
-                mat.set_at(2, 2, -q2);
-                mat.set_at(2, 3, q3);
+                mat.set_at(2, 0, two_q0);
+                mat.set_at(2, 1, -two_q1);
+                mat.set_at(2, 2, -two_q2);
+                mat.set_at(2, 3, two_q3);
             });
 
         // Perform the update step.
         self.filter
             .correct_nonlinear(&mut self.acc_measurement, |state, measurement| {
-                // let down = Vector3::new(T::zero(), T::zero(), T::one());
-                // let rotated = Self::rotate_vector(state, &down);
-                // measurement.set_row(0, rotated.x);
-                // measurement.set_row(1, rotated.y);
-                // measurement.set_row(2, rotated.z);
+                let down = Vector3::new(T::zero(), T::zero(), T::one());
+                let rotated = Self::rotate_vector_internal(state, down);
+                measurement.set_row(0, rotated.x);
+                measurement.set_row(1, rotated.y);
+                measurement.set_row(2, rotated.z);
 
-                measurement.set_row(0, two * (q1 * q3 - q0 * q2));
-                measurement.set_row(1, two * (q2 * q3 + q0 * q1));
+                measurement.set_row(0, two * (q1 * q3 + q0 * q2));
+                measurement.set_row(1, two * (q2 * q3 - q0 * q1));
                 measurement.set_row(2, T::one() - two * (q1 * q1 + q2 * q2));
             });
 
@@ -157,21 +160,14 @@ impl<T> OwnedOrientationEstimator<T> {
     {
         // Normalize the vector.
         self.mag_measurement.measurement_vector_mut().apply(|vec| {
-            let m = Vector3::from(magnetometer).normalized();
-            vec.set_row(0, m.x);
-            vec.set_row(1, m.y);
-            vec.set_row(2, m.z);
+            Self::apply_normalized_vector(magnetometer, vec);
         });
 
         // Update the Jacobian.
         let one = T::one();
         let two = one + one;
         let (q0, q1, q2, q3) = self.estimated_quaternion();
-        let (mx, my, mz) = (
-            self.magnetic_field_ref.x,
-            self.magnetic_field_ref.y,
-            self.magnetic_field_ref.z,
-        );
+        let (mx, my, mz) = self.magnetic_field_ref.into();
         self.mag_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
@@ -194,7 +190,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // Perform the update step.
         self.filter
             .correct_nonlinear(&mut self.mag_measurement, |state, measurement| {
-                let rotated = Self::rotate_vector_internal(state, &self.magnetic_field_ref);
+                let rotated = Self::rotate_vector_internal(state, self.magnetic_field_ref);
                 measurement.set_row(0, rotated.x);
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
@@ -208,12 +204,12 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType,
     {
-        Self::rotate_vector_internal(self.filter.state_vector(), &vector)
+        Self::rotate_vector_internal(self.filter.state_vector(), vector)
     }
 
     fn rotate_vector_internal(
         state: &StateVectorBufferOwnedType<STATES, T>,
-        vec: &Vector3<T>,
+        vec: Vector3<T>,
     ) -> Vector3<T>
     where
         T: MatrixDataType,
@@ -229,11 +225,11 @@ impl<T> OwnedOrientationEstimator<T> {
             + vec.y * two * (q1 * q2 - q0 * q3)
             + vec.z * two * (q1 * q3 + q0 * q2);
 
-        let y = vec.x * (q1 * q2 + q0 * q3)
+        let y = vec.x * two * (q1 * q2 + q0 * q3)
             + vec.y * (one - two * (q1 * q1 + q3 * q3))
             + vec.z * two * (q2 * q3 - q0 * q1);
 
-        let z = vec.x * (q1 * q3 - q0 * q2)
+        let z = vec.x * two * (q1 * q3 - q0 * q2)
             + vec.y * two * (q2 * q3 + q0 * q1)
             + vec.z * (one - two * (q1 * q1 + q2 * q2));
 
@@ -249,6 +245,13 @@ impl<T> OwnedOrientationEstimator<T> {
             let b = vec.get_row(1);
             let c = vec.get_row(2);
             let d = vec.get_row(3);
+
+            let (a, b, c, d) = if a < T::zero() {
+                (-a, -b, -c, -d)
+            } else {
+                (a, b, c, d)
+            };
+
             let norm_sq = a * a + b * b + c * c + d * d;
             let norm = norm_sq.square_root();
             let a = a / norm;
