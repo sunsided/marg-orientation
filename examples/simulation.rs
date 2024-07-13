@@ -260,7 +260,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         MagnetometerNoise::new(0.18, 0.11, 0.34),
         reference,
         0.001,
-        1e-6,
     );
 
     let mut gyro_x_estimator =

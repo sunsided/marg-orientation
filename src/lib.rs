@@ -18,6 +18,7 @@ mod macros;
 mod magnetometer_noise;
 mod magnetometer_reading;
 mod num_traits;
+#[deprecated(note = "This is a test implementation not suitable for real use")]
 pub mod test_estimator;
 mod vector3;
 
