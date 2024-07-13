@@ -8,7 +8,7 @@ q = [q0 q1 q2 q3];
 % Define the 3D vector
 v = [x; y; z];
 
-% Down vetor.
+% Down vector.
 % v(1) = 0;
 % v(2) = 0;
 % v(3) = 1;

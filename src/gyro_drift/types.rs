@@ -40,21 +40,13 @@ pub type OwnedObservation<T> = RegularObservation<
         T,
         MatrixDataArray<OBSERVATIONS, STATES, { OBSERVATIONS * STATES }, T>,
     >,
-    MeasurementVectorBuffer<
-        OBSERVATIONS,
-        T,
-        MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>,
-    >,
+    MeasurementVectorBuffer<OBSERVATIONS, T, MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>>,
     MeasurementNoiseCovarianceMatrixBuffer<
         OBSERVATIONS,
         T,
         MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
-    InnovationVectorBuffer<
-        OBSERVATIONS,
-        T,
-        MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>,
-    >,
+    InnovationVectorBuffer<OBSERVATIONS, T, MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>>,
     InnovationCovarianceMatrixBuffer<
         OBSERVATIONS,
         T,

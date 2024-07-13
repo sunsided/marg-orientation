@@ -1,0 +1,5 @@
+[submodule "tests/data"]
+    path = tests/data
+    url = https://github.com/sunsided/serial-sensors-test-data.git
+    shallow = true
+    branch = main

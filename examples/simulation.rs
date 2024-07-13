@@ -1,21 +1,3 @@
-use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
-use csv::ReaderBuilder;
-use kiss3d::event::{Action, Key, WindowEvent};
-use kiss3d::light::Light;
-use kiss3d::nalgebra::{
-    Matrix3, Point2, Point3, Rotation3, Scalar, Translation3, UnitQuaternion, Vector3,
-};
-use kiss3d::resource::Mesh;
-use kiss3d::scene::SceneNode;
-use kiss3d::text::Font;
-use kiss3d::window::Window;
-use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
-use marg_orientation::{
-    AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
-    MagnetometerReading,
-};
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
 use std::cell::RefCell;
 use std::error::Error;
 use std::ops::Deref;
@@ -23,15 +5,29 @@ use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-const DISPLAY_REFERENCE: bool = true;
-const DISPLAY_ESTIMATIONS: bool = false;
-const DISPLAY_RAW_ACCEL: bool = true;
-const DISPLAY_RAW_MAG: bool = true;
+use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
+use csv::ReaderBuilder;
+use kiss3d::event::{Action, Key, WindowEvent};
+use kiss3d::light::Light;
+use kiss3d::nalgebra::{Matrix3, Point2, Point3, Scalar, Translation3, UnitQuaternion, Vector3};
+use kiss3d::resource::Mesh;
+use kiss3d::scene::SceneNode;
+use kiss3d::text::Font;
+use kiss3d::window::Window;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
 
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/stationary";
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
-// const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
-const DATASET: &str = "serial-sensors/2024-07-10/stm32f3discovery/x-forward-tilt-nose-up";
+use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
+use marg_orientation::{
+    AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
+    MagnetometerReading,
+};
+
+// const DATASET: &str = "2024-07-10/stm32f3discovery/stationary";
+const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
+// const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
+// const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-tilt-nose-up";
+// const DATASET: &str = "2024-07-06/stm32f3discovery";
 
 /// Kiss3d uses a West, Up, North system by default.
 type Kiss3DCoordinates<T> = WestUpNorth<T>;
@@ -304,6 +300,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut simulation_time = Duration::default();
     let mut is_paused = false;
     let mut reset_times = false;
+    let mut display_reference = true;
+    let mut display_body_frame = false;
+    let mut display_sensors = true;
 
     'render: while window.render() {
         // Obtain the current render timestamp.
@@ -326,6 +325,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                     is_paused = !is_paused;
                 } else if key == Key::R {
                     reset_times = true;
+                    continue;
+                } else if key == Key::C {
+                    display_reference = !display_reference;
+                    continue;
+                } else if key == Key::B {
+                    display_body_frame = !display_body_frame;
+                    continue;
+                } else if key == Key::S {
+                    display_sensors = !display_sensors;
                     continue;
                 }
             }
@@ -425,9 +433,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Obtain a rotation matrix from the estimated angles.
-        let north = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
-        let east = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
-        let down = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 0.0, 1.0));
+        let north = estimator.rotate_vector_world(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
+        let east = estimator.rotate_vector_world(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
+        let down = estimator.rotate_vector_world(marg_orientation::Vector3::new(0.0, 0.0, 1.0));
         let filter_x = kiss3d_point(NorthEastDown::new(north.x, north.y, north.z));
         let filter_y = kiss3d_point(NorthEastDown::new(east.x, east.y, east.z));
         let filter_z = kiss3d_point(NorthEastDown::new(down.x, down.y, down.z));
@@ -436,8 +444,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         update_arrow_orientation(&mut arrows, filter_x, filter_y, filter_z);
 
         // Display default coordinate system.
-        #[allow(dead_code)]
-        if DISPLAY_REFERENCE {
+        if display_reference {
             let x_axis = NorthEastDown::new(1.0, 0.0, 0.0);
             let y_axis = NorthEastDown::new(0.0, 1.0, 0.0);
             let z_axis = NorthEastDown::new(0.0, 0.0, 1.0);
@@ -448,8 +455,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Convert estimations.
-        #[allow(dead_code)]
-        if DISPLAY_ESTIMATIONS {
+        if display_body_frame {
             // Display estimated orientation.
             window.draw_line(&Point3::default(), &filter_x, &red);
             window.draw_line(&Point3::default(), &filter_y, &green);
@@ -457,17 +463,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Display the accelerometer reading.
-        let am = NorthEastDown::new(accel_meas.x, accel_meas.y, accel_meas.z);
-        #[allow(dead_code)]
-        if DISPLAY_RAW_ACCEL {
+        if display_sensors {
+            let am = NorthEastDown::new(accel_meas.x, accel_meas.y, accel_meas.z);
             let p1 = Point3::new(0.0, 0.0, 0.0);
             window.draw_line(&p1, &kiss3d_point(am), &Point3::new(0.5, 0.0, 1.0));
         }
 
         // Display the compass reading.
-        let mm = NorthEastDown::new(compass_meas.x, compass_meas.y, compass_meas.z);
-        #[allow(dead_code)]
-        if DISPLAY_RAW_MAG {
+        if display_sensors {
+            let mm = NorthEastDown::new(compass_meas.x, compass_meas.y, compass_meas.z);
             let p1 = Point3::new(0.0, 0.0, 0.0);
             window.draw_line(&p1, &kiss3d_point(mm), &Point3::new(1.0, 0.0, 0.5));
         }

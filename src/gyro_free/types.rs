@@ -48,7 +48,12 @@ pub type OwnedVector3Observation<T> = ExtendedObservation<
     MeasurementNoiseCovarianceMatrixBuffer<
         VEC3_OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, VEC3_OBSERVATIONS, { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<
+            VEC3_OBSERVATIONS,
+            VEC3_OBSERVATIONS,
+            { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
+            T,
+        >,
     >,
     InnovationVectorBuffer<
         VEC3_OBSERVATIONS,
@@ -69,7 +74,12 @@ pub type OwnedVector3Observation<T> = ExtendedObservation<
     TemporaryResidualCovarianceInvertedMatrixBuffer<
         VEC3_OBSERVATIONS,
         T,
-        MatrixDataArray<VEC3_OBSERVATIONS, VEC3_OBSERVATIONS, { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }, T>,
+        MatrixDataArray<
+            VEC3_OBSERVATIONS,
+            VEC3_OBSERVATIONS,
+            { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
+            T,
+        >,
     >,
     TemporaryHPMatrixBuffer<
         VEC3_OBSERVATIONS,

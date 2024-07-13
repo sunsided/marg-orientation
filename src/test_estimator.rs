@@ -4,6 +4,7 @@ use crate::{
     GyroscopeBias, GyroscopeNoise, GyroscopeReading, IsNaN, MagnetometerNoise, MagnetometerReading,
     NormalizeAngle,
 };
+use core::ops::Neg;
 use minikalman::buffers::types::*;
 use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
@@ -11,7 +12,6 @@ use minikalman::regular::{
     Control, ControlBuilder, RegularKalman, RegularKalmanBuilder, RegularObservation,
     RegularObservationBuilder,
 };
-use core::ops::Neg;
 
 const STATES: usize = 6; // roll rate, pitch rate, yaw rate, as well as gyro bias (drift) terms
 const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate

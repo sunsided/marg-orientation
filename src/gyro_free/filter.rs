@@ -182,9 +182,9 @@ impl<T> OwnedOrientationEstimator<T> {
                 mat.set_at(1, 3, two * (q0 * mx - q3 * my + q2 * mz));
 
                 mat.set_at(2, 0, two * (q1 * my - q2 * mx + q0 * mz));
-                mat.set_at(2, 1, two * (q3*mx + q0*my - q1*mz));
-                mat.set_at(2, 2, two * (q3*my - q0*mx - q2*mz));
-                mat.set_at(2, 3, two * (q1*mx + q2*my + q3*mz));
+                mat.set_at(2, 1, two * (q3 * mx + q0 * my - q1 * mz));
+                mat.set_at(2, 2, two * (q3 * my - q0 * mx - q2 * mz));
+                mat.set_at(2, 3, two * (q1 * mx + q2 * my + q3 * mz));
             });
 
         // Perform the update step.
@@ -199,13 +199,6 @@ impl<T> OwnedOrientationEstimator<T> {
 
         self.normalize_state_quaternion();
         self.panic_if_nan();
-    }
-
-    pub fn rotate_vector(&self, vector: Vector3<T>) -> Vector3<T>
-    where
-        T: MatrixDataType,
-    {
-        Self::rotate_vector_internal(self.filter.state_vector(), vector)
     }
 
     fn rotate_vector_internal(
@@ -232,6 +225,44 @@ impl<T> OwnedOrientationEstimator<T> {
 
         let z = vec.x * two * (q1 * q3 - q0 * q2)
             + vec.y * two * (q2 * q3 + q0 * q1)
+            + vec.z * (one - two * (q1 * q1 + q2 * q2));
+
+        Vector3::new(x, y, z)
+    }
+
+    /// Rotate a vector in the body frame.
+    ///
+    /// For display purposes you likely want to use [`rotate_vector_world`](Self::rotate_vector_world) instead.
+    pub fn rotate_vector_body(&self, vector: Vector3<T>) -> Vector3<T>
+    where
+        T: MatrixDataType,
+    {
+        Self::rotate_vector_internal(self.filter.state_vector(), vector)
+    }
+
+    /// Rotates a vector in the world frame.
+    pub fn rotate_vector_world(&self, vec: Vector3<T>) -> Vector3<T>
+    where
+        T: MatrixDataType,
+    {
+        let state = self.filter.state_vector();
+        let q0 = state.get_row(0);
+        let q1 = state.get_row(1);
+        let q2 = state.get_row(2);
+        let q3 = state.get_row(3);
+
+        let one = T::one();
+        let two = one + one;
+        let x = vec.x * (one - two * (q2 * q2 + q3 * q3))
+            + vec.y * two * (q1 * q2 + q0 * q3)
+            + vec.z * two * (q1 * q3 - q0 * q2);
+
+        let y = vec.x * two * (q1 * q2 - q0 * q3)
+            + vec.y * (one - two * (q1 * q1 + q3 * q3))
+            + vec.z * two * (q2 * q3 + q0 * q1);
+
+        let z = vec.x * two * (q1 * q3 + q0 * q2)
+            + vec.y * two * (q2 * q3 - q0 * q1)
             + vec.z * (one - two * (q1 * q1 + q2 * q2));
 
         Vector3::new(x, y, z)
