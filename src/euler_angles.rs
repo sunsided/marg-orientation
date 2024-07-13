@@ -1,6 +1,8 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct EulerAngles<T> {
@@ -21,13 +23,6 @@ impl<T> EulerAngles<T> {
             pitch_theta,
             yaw_psi,
         }
-    }
-
-    /// Returns the length of the [`EulerAngles`] vector.
-    #[inline(always)]
-    #[allow(unused)]
-    pub const fn len(&self) -> usize {
-        3
     }
 }
 
@@ -64,36 +59,6 @@ where
             .field(&self.pitch_theta)
             .field(&self.yaw_psi)
             .finish()
-    }
-}
-
-#[cfg_attr(docsrs, doc(cfg(not(feature = "unsafe"))))]
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for EulerAngles<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.roll_phi,
-            1 => &self.pitch_theta,
-            2 => &self.yaw_psi,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg_attr(docsrs, doc(cfg(not(feature = "unsafe"))))]
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for EulerAngles<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.roll_phi,
-            1 => &mut self.pitch_theta,
-            2 => &mut self.yaw_psi,
-            _ => panic!("Index out of bounds"),
-        }
     }
 }
 

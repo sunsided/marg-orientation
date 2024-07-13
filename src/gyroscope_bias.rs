@@ -6,7 +6,7 @@ use uniform_array_derive::UniformArray;
 #[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
-pub struct GyroscopeReading<T> {
+pub struct GyroscopeBias<T> {
     /// The angular rate around the x-axis, in radians per second.
     pub omega_x: T,
     /// The angular rate around the y-axis, in radians per second.
@@ -15,8 +15,8 @@ pub struct GyroscopeReading<T> {
     pub omega_z: T,
 }
 
-impl<T> GyroscopeReading<T> {
-    /// Initializes a new [`GyroscopeReading`] instance.
+impl<T> GyroscopeBias<T> {
+    /// Initializes a new [`GyroscopeBias`] instance.
     #[inline(always)]
     pub const fn new(omega_x: T, omega_y: T, omega_z: T) -> Self {
         Self {
@@ -25,25 +25,9 @@ impl<T> GyroscopeReading<T> {
             omega_z,
         }
     }
-
-    /// Constructs a new [`GyroscopeReading`] instance from a reading in a given coordinate frame.
-    #[cfg(feature = "coordinate-frame")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
-    pub fn north_east_down<C>(coordinate: C) -> Self
-    where
-        C: Into<coordinate_frame::NorthEastDown<T>>,
-        T: Clone,
-    {
-        let coordinate = coordinate.into();
-        Self {
-            omega_x: coordinate.x(),
-            omega_y: coordinate.y(),
-            omega_z: coordinate.z(),
-        }
-    }
 }
 
-impl<T> Default for GyroscopeReading<T>
+impl<T> Default for GyroscopeBias<T>
 where
     T: Default,
 {
@@ -53,7 +37,7 @@ where
     }
 }
 
-impl<T> Clone for GyroscopeReading<T>
+impl<T> Clone for GyroscopeBias<T>
 where
     T: Clone,
 {
@@ -66,12 +50,12 @@ where
     }
 }
 
-impl<T> Debug for GyroscopeReading<T>
+impl<T> Debug for GyroscopeBias<T>
 where
     T: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("GyroscopeReading")
+        f.debug_tuple("GyroscopeBias")
             .field(&self.omega_x)
             .field(&self.omega_y)
             .field(&self.omega_z)
@@ -79,11 +63,11 @@ where
     }
 }
 
-impl<T> Mul<T> for GyroscopeReading<T>
+impl<T> Mul<T> for GyroscopeBias<T>
 where
     T: Mul<T, Output = T> + Clone,
 {
-    type Output = GyroscopeReading<T>;
+    type Output = GyroscopeBias<T>;
 
     fn mul(self, rhs: T) -> Self::Output {
         Self {
@@ -94,11 +78,11 @@ where
     }
 }
 
-impl<T> Sub<T> for GyroscopeReading<T>
+impl<T> Sub<T> for GyroscopeBias<T>
 where
     T: Sub<T, Output = T> + Clone,
 {
-    type Output = GyroscopeReading<T>;
+    type Output = GyroscopeBias<T>;
 
     fn sub(self, rhs: T) -> Self::Output {
         Self {
@@ -109,19 +93,7 @@ where
     }
 }
 
-#[cfg(feature = "coordinate-frame")]
-#[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
-impl<T, C> From<C> for GyroscopeReading<T>
-where
-    C: coordinate_frame::CoordinateFrame<Type = T>,
-    T: Copy + coordinate_frame::SaturatingNeg<Output = T>,
-{
-    fn from(value: C) -> Self {
-        Self::north_east_down(value.to_ned())
-    }
-}
-
-impl_standard_traits!(GyroscopeReading, T);
+impl_standard_traits!(GyroscopeBias, T);
 
 #[cfg(test)]
 mod test {
@@ -129,13 +101,13 @@ mod test {
 
     #[test]
     fn test_len() {
-        let reading = GyroscopeReading::<f32>::default();
+        let reading = GyroscopeBias::<f32>::default();
         assert_eq!(reading.len(), 3);
     }
 
     #[test]
     fn test_index() {
-        let reading = GyroscopeReading::<f32> {
+        let reading = GyroscopeBias::<f32> {
             omega_x: 1.0,
             omega_y: 2.0,
             omega_z: 3.0,

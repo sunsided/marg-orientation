@@ -1,7 +1,9 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::Mul;
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct AccelerometerReading<T> {
@@ -20,10 +22,20 @@ impl<T> AccelerometerReading<T> {
         Self { x, y, z }
     }
 
-    /// Returns the length of the [`AccelerometerReading`] vector.
-    #[inline(always)]
-    pub const fn len(&self) -> usize {
-        3
+    /// Constructs a new [`AccelerometerReading`] instance from a reading in a given coordinate frame.
+    #[cfg(feature = "coordinate-frame")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+    pub fn north_east_down<C>(coordinate: C) -> Self
+    where
+        C: Into<coordinate_frame::NorthEastDown<T>>,
+        T: Clone,
+    {
+        let coordinate = coordinate.into();
+        Self {
+            x: coordinate.x(),
+            y: coordinate.y(),
+            z: coordinate.z(),
+        }
     }
 }
 
@@ -78,31 +90,15 @@ where
     }
 }
 
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for AccelerometerReading<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for AccelerometerReading<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("Index out of bounds"),
-        }
+#[cfg(feature = "coordinate-frame")]
+#[cfg_attr(docsrs, doc(cfg(feature = "coordinate-frame")))]
+impl<T, C> From<C> for AccelerometerReading<T>
+where
+    C: coordinate_frame::CoordinateFrame<Type = T>,
+    T: Copy + coordinate_frame::SaturatingNeg<Output = T>,
+{
+    fn from(value: C) -> Self {
+        Self::north_east_down(value.to_ned())
     }
 }
 

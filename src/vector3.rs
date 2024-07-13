@@ -1,11 +1,13 @@
 use crate::accelerometer_reading::AccelerometerReading;
-use crate::impl_standard_traits;
 use crate::magnetometer_reading::MagnetometerReading;
 use core::borrow::Borrow;
 use core::fmt::{Debug, Formatter};
-use core::ops::{Add, Mul, Sub};
+use core::ops::{Add, Mul, Neg, Sub};
 use minikalman::matrix::MatrixDataType;
+use uniform_array_derive::UniformArray;
 
+/// A three-dimensional vector.
+#[derive(UniformArray, Copy)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct Vector3<T> {
@@ -158,6 +160,23 @@ impl<T> From<MagnetometerReading<T>> for Vector3<T> {
     }
 }
 
+/// Implements the unary negation.
+impl<T> Neg for Vector3<T>
+where
+    T: Neg<Output = T>,
+{
+    type Output = Vector3<T>;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+}
+
 /// Implements the vector dot product.
 impl<T> Mul<Vector3<T>> for Vector3<T>
 where
@@ -220,35 +239,11 @@ where
     }
 }
 
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for Vector3<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("Index out of bounds"),
-        }
+impl<T> From<Vector3<T>> for (T, T, T) {
+    fn from(value: Vector3<T>) -> Self {
+        (value.x, value.y, value.z)
     }
 }
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for Vector3<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-impl_standard_traits!(Vector3, T);
 
 #[cfg(test)]
 mod test {

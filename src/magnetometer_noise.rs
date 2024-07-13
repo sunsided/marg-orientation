@@ -1,7 +1,9 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::Mul;
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct MagnetometerNoise<T> {
@@ -18,12 +20,6 @@ impl<T> MagnetometerNoise<T> {
     #[inline(always)]
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
-    }
-
-    /// Returns the length of the [`MagnetometerNoise`] vector.
-    #[inline(always)]
-    pub const fn len(&self) -> usize {
-        3
     }
 }
 
@@ -74,34 +70,6 @@ where
             x: self.x * rhs.clone(),
             y: self.y * rhs.clone(),
             z: self.z * rhs.clone(),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for MagnetometerNoise<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for MagnetometerNoise<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("Index out of bounds"),
         }
     }
 }

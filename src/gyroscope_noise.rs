@@ -6,24 +6,24 @@ use uniform_array_derive::UniformArray;
 #[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
-pub struct AccelerometerNoise<T> {
-    /// The acceleration noise along the x-axis, in meters per second.
+pub struct GyroscopeNoise<T> {
+    /// The rotation rate noise along the x-axis.
     pub x: T,
-    /// The acceleration noise along the y-axis, in meters per second.
+    /// The rotation rate noise along the y-axis.
     pub y: T,
-    /// The acceleration noise along the z-axis, in meters per second.
+    /// The rotation rate noise along the z-axis.
     pub z: T,
 }
 
-impl<T> AccelerometerNoise<T> {
-    /// Initializes a new [`AccelerometerNoise`] instance.
+impl<T> GyroscopeNoise<T> {
+    /// Initializes a new [`GyroscopeNoise`] instance.
     #[inline(always)]
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
     }
 }
 
-impl<T> Default for AccelerometerNoise<T>
+impl<T> Default for GyroscopeNoise<T>
 where
     T: Default,
 {
@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<T> Clone for AccelerometerNoise<T>
+impl<T> Clone for GyroscopeNoise<T>
 where
     T: Clone,
 {
@@ -46,12 +46,12 @@ where
     }
 }
 
-impl<T> Debug for AccelerometerNoise<T>
+impl<T> Debug for GyroscopeNoise<T>
 where
     T: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("AccelerometerNoise")
+        f.debug_tuple("GyroscopeNoise")
             .field(&self.x)
             .field(&self.y)
             .field(&self.z)
@@ -59,11 +59,11 @@ where
     }
 }
 
-impl<T> Mul<T> for AccelerometerNoise<T>
+impl<T> Mul<T> for GyroscopeNoise<T>
 where
     T: Mul<T, Output = T> + Clone,
 {
-    type Output = AccelerometerNoise<T>;
+    type Output = GyroscopeNoise<T>;
 
     fn mul(self, rhs: T) -> Self::Output {
         Self {
@@ -74,7 +74,7 @@ where
     }
 }
 
-impl_standard_traits!(AccelerometerNoise, T);
+impl_standard_traits!(GyroscopeNoise, T);
 
 #[cfg(test)]
 mod test {
@@ -82,13 +82,13 @@ mod test {
 
     #[test]
     fn test_len() {
-        let reading = AccelerometerNoise::<f32>::default();
+        let reading = GyroscopeNoise::<f32>::default();
         assert_eq!(reading.len(), 3);
     }
 
     #[test]
     fn test_index() {
-        let reading = AccelerometerNoise::<f32> {
+        let reading = GyroscopeNoise::<f32> {
             x: 1.0,
             y: 2.0,
             z: 3.0,
