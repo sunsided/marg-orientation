@@ -4,12 +4,11 @@ use crate::{
     Abs, AccelerometerNoise, AccelerometerReading, ArcSin, ArcTan, EulerAngles, IsNaN,
     MagnetometerNoise, MagnetometerReading, NormalizeAngle,
 };
-use core::ops::{Add, Mul, Sub};
 use minikalman::buffers::types::*;
 use minikalman::extended::{ExtendedKalmanBuilder, ExtendedObservationBuilder};
 use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 
 /// A magnetic field reference vector.
 pub type MagneticReference<T> = MagnetometerReading<T>;
@@ -23,8 +22,6 @@ pub struct OwnedOrientationEstimator<T> {
     acc_measurement: OwnedVector3Observation<T>,
     /// Magnetic field reference vector for the current location.
     magnetic_field_ref: Vector3<T>,
-    /// A bias term to avoid divisions by zero.
-    epsilon: T,
 }
 
 impl<T> OwnedOrientationEstimator<T> {
@@ -41,7 +38,6 @@ impl<T> OwnedOrientationEstimator<T> {
         magnetometer_noise: MagnetometerNoise<T>,
         magnetic_field_ref: MagneticReference<T>,
         process_noise: T,
-        epsilon: T,
     ) -> Self
     where
         T: MatrixDataType + Default,
@@ -62,7 +58,6 @@ impl<T> OwnedOrientationEstimator<T> {
             mag_measurement,
             acc_measurement,
             magnetic_field_ref,
-            epsilon,
         }
     }
 }

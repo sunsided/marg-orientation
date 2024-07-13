@@ -22,6 +22,7 @@ impl<T> MagnetometerNoise<T> {
 
     /// Returns the length of the [`MagnetometerNoise`] vector.
     #[inline(always)]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         3
     }

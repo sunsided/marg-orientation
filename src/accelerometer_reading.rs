@@ -38,6 +38,7 @@ impl<T> AccelerometerReading<T> {
 
     /// Returns the length of the [`AccelerometerReading`] vector.
     #[inline(always)]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         3
     }

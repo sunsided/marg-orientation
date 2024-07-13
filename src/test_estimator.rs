@@ -24,12 +24,6 @@ pub struct OwnedOrientationEstimator<T> {
     measurement: OwnedObservation<T>,
     /// The angular tolerance, in radians, to detect a Gimbal Lock.
     gimbal_lock_tolerance: T,
-    /// The autocovariances of the noise terms.
-    accelerometer_noise: AccelerometerNoise<T>,
-    /// The autocovariances of the noise terms.
-    magnetometer_noise: MagnetometerNoise<T>,
-    /// A bias term to avoid divisions by zero.
-    epsilon: T,
 }
 
 impl<T> OwnedOrientationEstimator<T> {
@@ -61,9 +55,6 @@ impl<T> OwnedOrientationEstimator<T> {
             control,
             measurement,
             gimbal_lock_tolerance,
-            accelerometer_noise,
-            magnetometer_noise,
-            epsilon,
         }
     }
 }
@@ -454,7 +445,7 @@ impl<T> OwnedOrientationEstimator<T> {
     {
         // Define base vectors (i.e., TRIAD).
         let z = -a; // up
-        let x = m; // forward
+        let _x = m; // forward
         let y = m.cross(z).normalized(); // left
         let x = y.cross(z).normalized(); // forward
 
@@ -464,6 +455,7 @@ impl<T> OwnedOrientationEstimator<T> {
         let theta = (-ArcSin::arcsin(z.x)).normalize_angle(); // pitch
 
         // Handle Gimbal lock situations.
+        #[allow(unreachable_code)]
         if theta.close_to_zenith_or_nadir(self.gimbal_lock_tolerance) {
             todo!("test this");
             let psi = ArcTan::atan2(-x.y, y.y); // yaw
@@ -578,7 +570,7 @@ impl<T> OwnedOrientationEstimator<T> {
 
     /// Builds the Kalman filter control input.
     fn build_control(
-        gyroscope_noise: &GyroscopeNoise<T>,
+        _gyroscope_noise: &GyroscopeNoise<T>,
         process_noise_value: T,
     ) -> OwnedControlInput<T>
     where

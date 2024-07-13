@@ -22,6 +22,7 @@ impl<T> GyroscopeNoise<T> {
 
     /// Returns the length of the [`GyroscopeNoise`] vector.
     #[inline(always)]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         3
     }

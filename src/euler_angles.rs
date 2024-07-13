@@ -26,6 +26,7 @@ impl<T> EulerAngles<T> {
     /// Returns the length of the [`EulerAngles`] vector.
     #[inline(always)]
     #[allow(unused)]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         3
     }

@@ -27,6 +27,7 @@ impl<T> GyroscopeBias<T> {
     /// Returns the length of the [`GyroscopeBias`] vector.
     #[inline(always)]
     #[allow(unused)]
+    #[allow(clippy::len_without_is_empty)]
     pub const fn len(&self) -> usize {
         3
     }
