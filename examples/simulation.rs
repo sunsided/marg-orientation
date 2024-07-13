@@ -303,18 +303,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
     let mut is_paused = false;
+    let mut reset_times = false;
 
-    while window.render() {
+    'render: while window.render() {
         // Obtain the current render timestamp.
         let now = Instant::now();
         let elapsed_time = now - last_time;
         last_time = now;
+
+        if reset_times {
+            reset_times = false;
+            simulation_time = Duration::default();
+            accel_index = 0;
+            gyro_index = 0;
+            compass_index = 0;
+        }
 
         // Handle window events to check for key presses
         for event in window.events().iter() {
             if let WindowEvent::Key(key, Action::Press, _) = event.value {
                 if key == Key::Space {
                     is_paused = !is_paused;
+                } else if key == Key::R {
+                    reset_times = true;
+                    continue;
                 }
             }
         }
@@ -336,37 +348,31 @@ fn main() -> Result<(), Box<dyn Error>> {
             while accel[accel_index].time < simulation_time.as_secs_f64() {
                 accel_index += 1;
                 acc_should_update = true;
-                if accel_index >= gyro.len() {
-                    accel_index = 0;
-                    gyro_index = 0;
-                    compass_index = 0;
-                    simulation_time = Duration::default();
+                if accel_index >= accel.len() {
+                    reset_times = true;
+                    continue 'render;
                 }
             }
             while gyro[gyro_index].time < simulation_time.as_secs_f64() {
                 gyro_index += 1;
                 gyro_should_update = true;
                 if accel_index >= gyro.len() {
-                    accel_index = 0;
-                    gyro_index = 0;
-                    compass_index = 0;
-                    simulation_time = Duration::default();
+                    reset_times = true;
+                    continue 'render;
                 }
             }
             while compass[compass_index].time < simulation_time.as_secs_f64() {
                 compass_index += 1;
                 mag_should_update = true;
                 if compass_index >= compass.len() {
-                    accel_index = 0;
-                    gyro_index = 0;
-                    compass_index = 0;
-                    simulation_time = Duration::default();
+                    reset_times = true;
+                    continue 'render;
                 }
             }
         }
 
         let accel_meas = &accel[accel_index];
-        let gyro_meas = &gyro[accel_index];
+        let gyro_meas = &gyro[gyro_index];
         let compass_meas = &compass[compass_index];
 
         // Calculate the angle between the magnetic field vector and the down vector.
