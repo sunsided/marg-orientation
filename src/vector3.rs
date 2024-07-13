@@ -4,9 +4,10 @@ use core::borrow::Borrow;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Add, Mul, Neg, Sub};
 use minikalman::matrix::MatrixDataType;
+use uniform_array_derive::UniformArray;
 
 /// A three-dimensional vector.
-#[derive(uniform_array_derive::UniformArray, Copy)]
+#[derive(UniformArray, Copy)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct Vector3<T> {

@@ -1,7 +1,9 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::Mul;
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct MagnetometerReading<T> {
@@ -34,13 +36,6 @@ impl<T> MagnetometerReading<T> {
             y: coordinate.y(),
             z: coordinate.z(),
         }
-    }
-
-    /// Returns the length of the [`MagnetometerReading`] vector.
-    #[inline(always)]
-    #[allow(clippy::len_without_is_empty)]
-    pub const fn len(&self) -> usize {
-        3
     }
 
     /// Represents this reading as a tuple.
@@ -112,34 +107,6 @@ where
 {
     fn from(value: C) -> Self {
         Self::north_east_down(value.to_ned())
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for MagnetometerReading<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for MagnetometerReading<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("Index out of bounds"),
-        }
     }
 }
 

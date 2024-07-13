@@ -1,7 +1,9 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Mul, Sub};
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct GyroscopeReading<T> {
@@ -38,14 +40,6 @@ impl<T> GyroscopeReading<T> {
             omega_y: coordinate.y(),
             omega_z: coordinate.z(),
         }
-    }
-
-    /// Returns the length of the [`GyroscopeReading`] vector.
-    #[inline(always)]
-    #[allow(unused)]
-    #[allow(clippy::len_without_is_empty)]
-    pub const fn len(&self) -> usize {
-        3
     }
 }
 
@@ -124,34 +118,6 @@ where
 {
     fn from(value: C) -> Self {
         Self::north_east_down(value.to_ned())
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for GyroscopeReading<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.omega_x,
-            1 => &self.omega_y,
-            2 => &self.omega_z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for GyroscopeReading<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.omega_x,
-            1 => &mut self.omega_y,
-            2 => &mut self.omega_z,
-            _ => panic!("Index out of bounds"),
-        }
     }
 }
 

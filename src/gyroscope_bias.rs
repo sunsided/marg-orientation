@@ -1,7 +1,9 @@
 use crate::impl_standard_traits;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Mul, Sub};
+use uniform_array_derive::UniformArray;
 
+#[derive(UniformArray)]
 #[cfg_attr(test, ensure_uniform_type::ensure_uniform_type)]
 #[repr(C)]
 pub struct GyroscopeBias<T> {
@@ -22,14 +24,6 @@ impl<T> GyroscopeBias<T> {
             omega_y,
             omega_z,
         }
-    }
-
-    /// Returns the length of the [`GyroscopeBias`] vector.
-    #[inline(always)]
-    #[allow(unused)]
-    #[allow(clippy::len_without_is_empty)]
-    pub const fn len(&self) -> usize {
-        3
     }
 }
 
@@ -95,34 +89,6 @@ where
             omega_x: self.omega_x - rhs.clone(),
             omega_y: self.omega_y - rhs.clone(),
             omega_z: self.omega_z - rhs.clone(),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::Index<usize> for GyroscopeBias<T> {
-    type Output = T;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.omega_x,
-            1 => &self.omega_y,
-            2 => &self.omega_z,
-            _ => panic!("Index out of bounds"),
-        }
-    }
-}
-
-#[cfg(not(feature = "unsafe"))]
-impl<T> core::ops::IndexMut<usize> for GyroscopeBias<T> {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => &mut self.omega_x,
-            1 => &mut self.omega_y,
-            2 => &mut self.omega_z,
-            _ => panic!("Index out of bounds"),
         }
     }
 }
