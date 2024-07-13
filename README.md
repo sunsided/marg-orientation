@@ -1,5 +1,7 @@
 # MARG (Magnetic, Angular Rate, and Gravity) orientation estimation
 
+> ⚠️ **Work in progress.** ⚠️
+
 [![Crates.io](https://img.shields.io/crates/v/marg-orientation)](https://crates.io/crates/marg-orientation)
 [![Crates.io](https://img.shields.io/crates/l/marg-orientation)](https://crates.io/crates/marg-orientation)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/sunsided/marg-orientation/rust.yml)
