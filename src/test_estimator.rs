@@ -857,7 +857,6 @@ type OwnedObservation<T> = RegularObservation<
 #[cfg(feature = "std")]
 mod tests {
     use super::*;
-    use crate::accelerometer_reading::AccelerometerReading;
 
     trait Round<T> {
         /// Rounds to two decimal places.
