@@ -20,6 +20,7 @@ coordinate-frame = ["dep:coordinate-frame"]
 coordinate-frame = { version = "0.3.2", optional = true, features = ["num-traits", "nalgebra"] }
 minikalman = { version = "0.6.0", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
+uniform-array-derive = "0.1.0"
 
 [dev-dependencies]
 ensure-uniform-type = "0.1.1"

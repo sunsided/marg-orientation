@@ -194,7 +194,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // Perform the update step.
         self.filter
             .correct_nonlinear(&mut self.mag_measurement, |state, measurement| {
-                let rotated = Self::rotate_vector(state, &self.magnetic_field_ref);
+                let rotated = Self::rotate_vector_internal(state, &self.magnetic_field_ref);
                 measurement.set_row(0, rotated.x);
                 measurement.set_row(1, rotated.y);
                 measurement.set_row(2, rotated.z);
@@ -204,7 +204,17 @@ impl<T> OwnedOrientationEstimator<T> {
         self.panic_if_nan();
     }
 
-    fn rotate_vector(state: &StateVectorBufferOwnedType<STATES, T>, vec: &Vector3<T>) -> Vector3<T>
+    pub fn rotate_vector(&self, vector: Vector3<T>) -> Vector3<T>
+    where
+        T: MatrixDataType,
+    {
+        Self::rotate_vector_internal(self.filter.state_vector(), &vector)
+    }
+
+    fn rotate_vector_internal(
+        state: &StateVectorBufferOwnedType<STATES, T>,
+        vec: &Vector3<T>,
+    ) -> Vector3<T>
     where
         T: MatrixDataType,
     {
@@ -283,14 +293,11 @@ impl<T> OwnedOrientationEstimator<T> {
     /// Obtains the current estimates of the roll, pitch and yaw angles.
     pub fn estimated_angles(&self) -> EulerAngles<T>
     where
-        T: One
-            + Copy
+        T: MatrixDataType
             + Abs<T, Output = T>
             + ArcSin<T, Output = T>
             + ArcTan<T, Output = T>
-            + Mul<T, Output = T>
-            + Add<T, Output = T>
-            + Sub<T, Output = T>,
+            + NormalizeAngle<Output = T>,
     {
         EulerAngles::new(self.roll(), self.pitch(), self.yaw())
     }
@@ -300,19 +307,15 @@ impl<T> OwnedOrientationEstimator<T> {
     /// The roll angle is defined as the amount rotation around the y-axis (forward).
     pub fn roll(&self) -> T
     where
-        T: One
-            + Copy
-            + ArcTan<T, Output = T>
-            + Mul<T, Output = T>
-            + Add<T, Output = T>
-            + Sub<T, Output = T>,
+        T: MatrixDataType + ArcTan<T, Output = T> + NormalizeAngle<Output = T>,
     {
         let (w, x, y, z) = self.estimated_quaternion();
         let one = T::one();
         let two = one + one;
         let sinr_cosp = two * (w * x + y * z);
         let cosr_cosp = one - two * (x * x + y * y);
-        sinr_cosp.atan2(cosr_cosp)
+        let roll = sinr_cosp.atan2(cosr_cosp);
+        roll.normalize_angle()
     }
 
     /// Obtains the current estimation variance (uncertainty) of the roll angle φ (phi), in radians².
@@ -334,20 +337,15 @@ impl<T> OwnedOrientationEstimator<T> {
     /// The pitch angle is defined as the amount rotation around the x-axis (right).
     pub fn pitch(&self) -> T
     where
-        T: One
-            + Copy
-            + Abs<T, Output = T>
-            + ArcSin<T, Output = T>
-            + Mul<T, Output = T>
-            + Add<T, Output = T>
-            + Sub<T, Output = T>,
+        T: MatrixDataType + Abs<T, Output = T> + ArcSin<T, Output = T> + NormalizeAngle<Output = T>,
     {
         let (w, x, y, z) = self.estimated_quaternion();
         let one = T::one();
         let two = one + one;
         let sinp = two * (w * y - z * x);
         // TODO: If sin >= 1.0 || sin <= -1.0, clamp to +/- pi/2 instead
-        sinp.arcsin()
+        let pitch = sinp.arcsin();
+        pitch.normalize_angle()
     }
 
     /// Obtains the current estimation variance (uncertainty) of the pitch angle θ (theta), in radians².
@@ -369,19 +367,15 @@ impl<T> OwnedOrientationEstimator<T> {
     /// The yaw angle is defined as the amount rotation around the z-axis (up).
     pub fn yaw(&self) -> T
     where
-        T: One
-            + Copy
-            + ArcTan<T, Output = T>
-            + Mul<T, Output = T>
-            + Add<T, Output = T>
-            + Sub<T, Output = T>,
+        T: MatrixDataType + ArcTan<T, Output = T> + NormalizeAngle<Output = T>,
     {
         let (w, x, y, z) = self.estimated_quaternion();
         let one = T::one();
         let two = one + one;
         let siny_cosp = two * (w * z + x * y);
         let cosy_cosp = one - two * (y * y + z * z);
-        siny_cosp.atan2(cosy_cosp)
+        let yaw = siny_cosp.atan2(cosy_cosp);
+        yaw.normalize_angle()
     }
 
     /// Obtains the current estimation variance (uncertainty) of the yaw angle ψ (psi), in radians².

@@ -67,10 +67,10 @@ impl NormalizeAngle<f32> for f32 {
     fn normalize_angle(self) -> Self::Output {
         let mut normalized = self;
         while normalized > std::f32::consts::PI {
-            normalized -= 2.0 * std::f32::consts::PI;
+            normalized -= std::f32::consts::TAU;
         }
         while normalized < -std::f32::consts::PI {
-            normalized += 2.0 * std::f32::consts::PI;
+            normalized += std::f32::consts::TAU;
         }
         normalized
     }

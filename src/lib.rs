@@ -29,6 +29,7 @@ pub use crate::gyroscope_noise::GyroscopeNoise;
 pub use crate::gyroscope_reading::GyroscopeReading;
 pub use crate::magnetometer_noise::MagnetometerNoise;
 pub use crate::magnetometer_reading::MagnetometerReading;
+pub use crate::vector3::Vector3;
 
 pub use crate::num_traits::*;
 

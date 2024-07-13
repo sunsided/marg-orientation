@@ -343,6 +343,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Calculate the angle between the magnetic field vector and the down vector.
         let angle_mag_accel = calculate_angle_acc_mag(accel_meas, compass_meas);
 
+        // Calculated heading.
+        let heading_degrees = {
+            let vec = Vector3::new(compass_meas.x, compass_meas.y, compass_meas.z).normalize();
+            let heading = vec[1].atan2(vec[0]).to_degrees();
+            if heading >= 360.0 {
+                heading - 360.0
+            } else if heading <= 0.0 {
+                heading + 360.0
+            } else {
+                heading
+            }
+        };
+
         // Run a prediction.
         estimator.predict();
         gyro_x_estimator.predict(elapsed_time.as_secs_f32());
@@ -376,6 +389,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Obtain a rotation matrix from the estimated angles.
         let estimated_angles = estimator.estimated_angles();
+        /*
         let rotation = Rotation3::from_euler_angles(
             estimated_angles.roll_phi,
             estimated_angles.pitch_theta,
@@ -393,10 +407,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         let filter_x = Point3::from(rotation * north);
         let filter_y = Point3::from(rotation * east);
         let filter_z = Point3::from(rotation * down);
+        */
 
-        let filter_x = kiss3d_point(NorthEastDown::new(filter_x[0], filter_x[1], filter_x[2]));
-        let filter_y = kiss3d_point(NorthEastDown::new(filter_y[0], filter_y[1], filter_y[2]));
-        let filter_z = kiss3d_point(NorthEastDown::new(filter_z[0], filter_z[1], filter_z[2]));
+        let north = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 0.0));
+        let east = estimator.rotate_vector(marg_orientation::Vector3::new(0.0, 1.0, 0.0));
+        let down = estimator.rotate_vector(marg_orientation::Vector3::new(1.0, 0.0, 1.0));
+
+        let filter_x = kiss3d_point(NorthEastDown::new(north.x, north.y, north.z));
+        let filter_y = kiss3d_point(NorthEastDown::new(east.x, east.y, east.z));
+        let filter_z = kiss3d_point(NorthEastDown::new(down.x, down.y, down.z));
 
         // Display elapsed time since last frame.
         let info = format!(
@@ -487,10 +506,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display angle between measured accelerometer and magnetometer.
-        let info = format!(
-            "cos⁻¹(acc·mag) = {:+0.02}°",
-            angle_mag_accel * 180.0 / std::f32::consts::PI
+        let info = format!("cos⁻¹(acc·mag) = {:+0.02}°", angle_mag_accel.to_degrees());
+        window.draw_text(
+            &info,
+            &Point2::new(0.0, 1200.0 - 32.0 * 18.0),
+            32.0,
+            &font,
+            &Point3::new(1.0, 1.0, 1.0),
         );
+
+        // Display angle between measured accelerometer and magnetometer.
+        let info = format!("heading = {:+0.02}°", heading_degrees);
         window.draw_text(
             &info,
             &Point2::new(0.0, 1200.0 - 32.0 * 17.0),
