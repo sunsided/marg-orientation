@@ -400,20 +400,6 @@ impl<T> OwnedOrientationEstimator<T> {
         roll.normalize_angle()
     }
 
-    /// Obtains the current estimation variance (uncertainty) of the roll angle φ (phi), in radians².
-    ///
-    /// ## Interpretation
-    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
-    ///   considered to be precise, as it doesn't vary much from the mean.
-    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
-    ///   considered to be less precise, as it has a wide spread around the mean.
-    pub fn roll_variance(&self) -> T
-    where
-        T: Zero,
-    {
-        T::zero()
-    }
-
     /// Obtains the current estimate of the pitch angle θ (theta), in radians.
     ///
     /// The pitch angle is defined as the amount rotation around the x-axis (right).
@@ -430,20 +416,6 @@ impl<T> OwnedOrientationEstimator<T> {
         pitch.normalize_angle()
     }
 
-    /// Obtains the current estimation variance (uncertainty) of the pitch angle θ (theta), in radians².
-    ///
-    /// ## Interpretation
-    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
-    ///   considered to be precise, as it doesn't vary much from the mean.
-    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
-    ///   considered to be less precise, as it has a wide spread around the mean.
-    pub fn pitch_variance(&self) -> T
-    where
-        T: Zero,
-    {
-        T::zero()
-    }
-
     /// Obtains the current estimate of the yaw angle ψ (psi), in radians.
     ///
     /// The yaw angle is defined as the amount rotation around the z-axis (up).
@@ -458,20 +430,6 @@ impl<T> OwnedOrientationEstimator<T> {
         let cosy_cosp = one - two * (y * y + z * z);
         let yaw = siny_cosp.atan2(cosy_cosp);
         yaw.normalize_angle()
-    }
-
-    /// Obtains the current estimation variance (uncertainty) of the yaw angle ψ (psi), in radians².
-    ///
-    /// ## Interpretation
-    /// - Low Variance: Indicates high certainty in the estimate. The state estimate is
-    ///   considered to be precise, as it doesn't vary much from the mean.
-    /// - High Variance: Indicates high uncertainty in the estimate. The state estimate is
-    ///   considered to be less precise, as it has a wide spread around the mean.
-    pub fn yaw_variance(&self) -> T
-    where
-        T: Zero,
-    {
-        T::zero()
     }
 }
 
