@@ -117,7 +117,7 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Update the Jacobian.
         let two = T::one() + T::one();
-        let (q0, q1, q2, q3) = self.estimated_quaternion();
+        let (q0, q1, q2, q3) = self.estimated_quaternion_internal();
 
         // This applies a simplified version of the Jacobian of the rotated vector with
         // respect to the rotation quaternion. In general, all vector components influence
@@ -189,7 +189,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // Update the Jacobian.
         let one = T::one();
         let two = one + one;
-        let (q0, q1, q2, q3) = self.estimated_quaternion();
+        let (q0, q1, q2, q3) = self.estimated_quaternion_internal();
         let (mx, my, mz) = self.magnetic_field_ref.into();
 
         // This applies a simplified version of the Jacobian of the rotated vector with
@@ -336,7 +336,7 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Gets the estimated quaternion in (w, x, y, z) order.
-    fn estimated_quaternion(&self) -> (T, T, T, T)
+    fn estimated_quaternion_internal(&self) -> (T, T, T, T)
     where
         T: Copy,
     {
@@ -369,7 +369,7 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + ArcTan<T, Output = T> + NormalizeAngle<Output = T>,
     {
-        let (w, x, y, z) = self.estimated_quaternion();
+        let (w, x, y, z) = self.estimated_quaternion_internal();
         let one = T::one();
         let two = one + one;
         let sinr_cosp = two * (w * x + y * z);
@@ -399,7 +399,7 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + Abs<T, Output = T> + ArcSin<T, Output = T> + NormalizeAngle<Output = T>,
     {
-        let (w, x, y, z) = self.estimated_quaternion();
+        let (w, x, y, z) = self.estimated_quaternion_internal();
         let one = T::one();
         let two = one + one;
         let sinp = two * (w * y - z * x);
@@ -429,7 +429,7 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + ArcTan<T, Output = T> + NormalizeAngle<Output = T>,
     {
-        let (w, x, y, z) = self.estimated_quaternion();
+        let (w, x, y, z) = self.estimated_quaternion_internal();
         let one = T::one();
         let two = one + one;
         let siny_cosp = two * (w * z + x * y);
@@ -450,6 +450,16 @@ impl<T> OwnedOrientationEstimator<T> {
         T: Zero,
     {
         T::zero()
+    }
+}
+
+impl OwnedOrientationEstimator<f32> {
+    /// Provides the estimated orientation as a [`Quaternion`](micromath::Quaternion).
+    #[cfg(feature = "micromath")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "micromath")))]
+    pub fn estimated_quaternion(&self) -> micromath::Quaternion {
+        let (w, x, y, z) = self.estimated_quaternion_internal();
+        micromath::Quaternion::new(w, x, y, z)
     }
 }
 

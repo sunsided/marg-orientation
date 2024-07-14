@@ -1,9 +1,6 @@
-// Enable no_std mode.
 #![cfg_attr(not(feature = "std"), no_std)]
-// Ensure allow(unsafe_code) / forbid(unsafe_code) markers.
 #![cfg_attr(feature = "unsafe", allow(unsafe_code))]
 #![cfg_attr(not(feature = "unsafe"), forbid(unsafe_code))]
-// Only enables the `doc_cfg` feature when the `docsrs` configuration attribute is defined.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod gyro_drift;
