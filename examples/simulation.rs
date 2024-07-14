@@ -619,9 +619,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "φ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "φ = {:+0.02} ({:+0.02}°)",
             estimated_angles.roll_phi,
-            estimator.roll_variance().sqrt(),
             estimated_angles.roll_phi * 180.0 / std::f32::consts::PI,
         );
         window.draw_text(
@@ -634,9 +633,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "θ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "θ = {:+0.02} ({:+0.02}°)",
             estimated_angles.pitch_theta,
-            estimator.pitch_variance().sqrt(),
             estimated_angles.pitch_theta * 180.0 / std::f32::consts::PI,
         );
         window.draw_text(
@@ -649,9 +647,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Display estimated angles.
         let info = format!(
-            "ψ = {:+0.02} ± {:+0.02} rad ({:+0.02}°)",
+            "ψ = {:+0.02} ({:+0.02}°)",
             estimated_angles.yaw_psi,
-            estimator.yaw_variance().sqrt(),
             estimated_angles.yaw_psi * 180.0 / std::f32::consts::PI,
         );
         window.draw_text(

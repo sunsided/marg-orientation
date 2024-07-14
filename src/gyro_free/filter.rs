@@ -9,7 +9,6 @@ use minikalman::buffers::types::*;
 use minikalman::extended::{ExtendedKalmanBuilder, ExtendedObservationBuilder};
 use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
-use num_traits::Zero;
 
 /// A magnetic field reference vector.
 pub type MagneticReference<T> = MagnetometerReading<T>;
