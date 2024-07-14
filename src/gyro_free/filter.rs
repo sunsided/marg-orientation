@@ -27,12 +27,16 @@ pub type MagneticReference<T> = MagnetometerReading<T>;
 /// in that frame to operate correctly.
 pub struct OwnedOrientationEstimator<T> {
     filter: OwnedKalmanFilter<T>,
-    /// Magnetometer measurements.
-    mag_measurement: OwnedVector3Observation<T>,
-    /// Accelerometer measurements.
-    acc_measurement: OwnedVector3Observation<T>,
+    /// Accelerometer and magnetometer measurements.
+    /// We share the same observation struct here because the dimensionality of the
+    /// measurements is identical and both need to construct a fully filled Jacobian.
+    measurement: OwnedVector3Observation<T>,
     /// Magnetic field reference vector for the current location.
     magnetic_field_ref: Vector3<T>,
+    /// Accelerometer noise term for reconstructing the observation noise matrix.
+    accelerometer_noise: AccelerometerNoise<T>,
+    /// Magnetometer noise term for reconstructing the observation noise matrix.
+    magnetometer_noise: MagnetometerNoise<T>,
 }
 
 impl<T> OwnedOrientationEstimator<T> {
@@ -54,8 +58,7 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType + Default,
     {
         let filter = Self::build_filter(process_noise);
-        let mag_measurement = Self::build_mag_measurement(&magnetometer_noise);
-        let acc_measurement = Self::build_accel_measurement(&accelerometer_noise);
+        let measurement = Self::build_measurement();
 
         let magnetic_field_ref = Vector3::new(
             magnetic_field_ref.x,
@@ -66,9 +69,10 @@ impl<T> OwnedOrientationEstimator<T> {
 
         Self {
             filter,
-            mag_measurement,
-            acc_measurement,
+            measurement,
             magnetic_field_ref,
+            accelerometer_noise,
+            magnetometer_noise,
         }
     }
 }
@@ -110,10 +114,19 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + IsNaN,
     {
-        // Normalize the vectors.
-        self.acc_measurement.measurement_vector_mut().apply(|vec| {
+        // Apply the normalized measurement.
+        self.measurement.measurement_vector_mut().apply(|vec| {
             Self::apply_normalized_vector(accelerometer, vec);
         });
+
+        // Reconstruct the noise matrix.
+        self.measurement
+            .measurement_noise_covariance_mut()
+            .apply(|mat| {
+                mat.set_at(0, 0, self.accelerometer_noise.x);
+                mat.set_at(1, 1, self.accelerometer_noise.y);
+                mat.set_at(2, 2, self.accelerometer_noise.z);
+            });
 
         // Update the Jacobian.
         let two = T::one() + T::one();
@@ -126,7 +139,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // and remaining terms simplify.
         //
         // See the Jacobian on the magnetometer for a generalised version.
-        self.acc_measurement
+        self.measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
                 let two_q0 = q0 * two;
@@ -152,7 +165,7 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Perform the update step.
         self.filter
-            .correct_nonlinear(&mut self.acc_measurement, |state, measurement| {
+            .correct_nonlinear(&mut self.measurement, |state, measurement| {
                 let down = Vector3::new(T::zero(), T::zero(), T::one());
                 let rotated = Self::rotate_vector_internal(state, down);
                 measurement.set_row(0, rotated.x);
@@ -181,10 +194,19 @@ impl<T> OwnedOrientationEstimator<T> {
     where
         T: MatrixDataType + IsNaN,
     {
-        // Normalize the vector.
-        self.mag_measurement.measurement_vector_mut().apply(|vec| {
+        // Apply the normalized measurement.
+        self.measurement.measurement_vector_mut().apply(|vec| {
             Self::apply_normalized_vector(magnetometer, vec);
         });
+
+        // Reconstruct the noise matrix.
+        self.measurement
+            .measurement_noise_covariance_mut()
+            .apply(|mat| {
+                mat.set_at(0, 0, self.magnetometer_noise.x);
+                mat.set_at(1, 1, self.magnetometer_noise.y);
+                mat.set_at(2, 2, self.magnetometer_noise.z);
+            });
 
         // Update the Jacobian.
         let one = T::one();
@@ -195,7 +217,7 @@ impl<T> OwnedOrientationEstimator<T> {
         // This applies a simplified version of the Jacobian of the rotated vector with
         // respect to the rotation quaternion. Unlike the accelerometer update, here, all
         // vector components affect the matrix.
-        self.mag_measurement
+        self.measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
                 mat.set_at(0, 0, two * (q0 * mx - q3 * my + q2 * mz));
@@ -216,7 +238,7 @@ impl<T> OwnedOrientationEstimator<T> {
 
         // Perform the update step.
         self.filter
-            .correct_nonlinear(&mut self.mag_measurement, |state, measurement| {
+            .correct_nonlinear(&mut self.measurement, |state, measurement| {
                 let reference = self.magnetic_field_ref;
                 let rotated = Self::rotate_vector_internal(state, reference);
                 measurement.set_row(0, rotated.x);
@@ -547,9 +569,7 @@ impl<T> OwnedOrientationEstimator<T> {
     }
 
     /// Builds the Kalman filter observation used for the prediction.
-    fn build_mag_measurement(
-        magnetometer_noise: &MagnetometerNoise<T>,
-    ) -> OwnedVector3Observation<T>
+    fn build_measurement() -> OwnedVector3Observation<T>
     where
         T: MatrixDataType + Default,
     {
@@ -585,134 +605,7 @@ impl<T> OwnedOrientationEstimator<T> {
                     T,
                 >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
             );
-        noise_covariance.apply(|mat| {
-            mat.set_at(0, 0, magnetometer_noise.x);
-            mat.set_at(1, 1, magnetometer_noise.y);
-            mat.set_at(2, 2, magnetometer_noise.z);
-        });
-
-        // Innovation vector
-        let innovation_vector =
-            InnovationVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                VEC3_OBSERVATIONS,
-                1,
-                VEC3_OBSERVATIONS,
-                T,
-            >(
-                [zero; VEC3_OBSERVATIONS]
-            ));
-
-        // Innovation covariance matrix
-        let innovation_covariance =
-            InnovationCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
-                MatrixData::new_array::<
-                    VEC3_OBSERVATIONS,
-                    VEC3_OBSERVATIONS,
-                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
-                    T,
-                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
-            );
-
-        // Kalman Gain matrix
-        let kalman_gain = KalmanGainMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
-                [zero; { STATES * VEC3_OBSERVATIONS }],
-            ),
-        );
-
-        // Temporary residual covariance inverted matrix
-        let temp_sinv =
-            TemporaryResidualCovarianceInvertedMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
-                MatrixData::new_array::<
-                    VEC3_OBSERVATIONS,
-                    VEC3_OBSERVATIONS,
-                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
-                    T,
-                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
-            );
-
-        // Temporary H×P matrix
-        let temp_hp = TemporaryHPMatrixBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
-            MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
-                [zero; { VEC3_OBSERVATIONS * STATES }],
-            ),
-        );
-
-        // Temporary P×Hᵀ matrix
-        let temp_pht = TemporaryPHTMatrixBuffer::<STATES, VEC3_OBSERVATIONS, T, _>::new(
-            MatrixData::new_array::<STATES, VEC3_OBSERVATIONS, { STATES * VEC3_OBSERVATIONS }, T>(
-                [zero; { STATES * VEC3_OBSERVATIONS }],
-            ),
-        );
-
-        // Temporary K×(H×P) matrix
-        let temp_khp = TemporaryKHPMatrixBuffer::<STATES, T, _>::new(MatrixData::new_array::<
-            STATES,
-            STATES,
-            { STATES * STATES },
-            T,
-        >(
-            [zero; { STATES * STATES }]
-        ));
-
-        ExtendedObservationBuilder::new::<STATES, VEC3_OBSERVATIONS, T>(
-            observation_matrix,
-            measurement,
-            noise_covariance,
-            innovation_vector,
-            innovation_covariance,
-            kalman_gain,
-            temp_sinv,
-            temp_hp,
-            temp_pht,
-            temp_khp,
-        )
-    }
-
-    /// Builds the Kalman filter observation used for the prediction.
-    fn build_accel_measurement(
-        accelerometer_noise: &AccelerometerNoise<T>,
-    ) -> OwnedVector3Observation<T>
-    where
-        T: MatrixDataType + Default,
-    {
-        let zero = T::default();
-
-        // Measurement vector
-        let measurement =
-            MeasurementVectorBuffer::<VEC3_OBSERVATIONS, T, _>::new(MatrixData::new_array::<
-                VEC3_OBSERVATIONS,
-                1,
-                VEC3_OBSERVATIONS,
-                T,
-            >(
-                [zero; VEC3_OBSERVATIONS]
-            ));
-
-        // Observation matrix
-        let mut observation_matrix =
-            ObservationMatrixMutBuffer::<VEC3_OBSERVATIONS, STATES, T, _>::new(
-                MatrixData::new_array::<VEC3_OBSERVATIONS, STATES, { VEC3_OBSERVATIONS * STATES }, T>(
-                    [zero; { VEC3_OBSERVATIONS * STATES }],
-                ),
-            );
-        observation_matrix.set_all(T::zero());
-
-        // Measurement noise covariance
-        let mut noise_covariance =
-            MeasurementNoiseCovarianceMatrixBuffer::<VEC3_OBSERVATIONS, T, _>::new(
-                MatrixData::new_array::<
-                    VEC3_OBSERVATIONS,
-                    VEC3_OBSERVATIONS,
-                    { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS },
-                    T,
-                >([zero; { VEC3_OBSERVATIONS * VEC3_OBSERVATIONS }]),
-            );
-        noise_covariance.apply(|mat| {
-            mat.set_at(0, 0, accelerometer_noise.x);
-            mat.set_at(1, 1, accelerometer_noise.y);
-            mat.set_at(2, 2, accelerometer_noise.z);
-        });
+        noise_covariance.make_identity();
 
         // Innovation vector
         let innovation_vector =
