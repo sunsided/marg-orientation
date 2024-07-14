@@ -5,14 +5,12 @@
 
 pub mod gyro_drift;
 pub mod gyro_free;
+pub mod test_estimator;
+pub mod types;
 
 mod macros;
-
 mod num_traits;
-#[deprecated(note = "This is a test implementation not suitable for real use")]
-pub mod test_estimator;
 
-pub mod types;
 pub use crate::num_traits::*;
 
 /// Imports commonly used types and traits.
