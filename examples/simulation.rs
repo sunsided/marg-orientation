@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ))
     .expect("failed to load font");
 
-    let mut window = Window::new("MPU6050 and HMC8533L simulation");
+    let mut window = Window::new("LSM303DLHC and L3GD20 simulation");
     window.set_framerate_limit(Some(30));
     window.set_light(Light::StickToCamera);
 
