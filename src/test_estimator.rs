@@ -855,6 +855,7 @@ type OwnedObservation<T> = RegularObservation<
 
 #[cfg(test)]
 #[cfg(feature = "std")]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

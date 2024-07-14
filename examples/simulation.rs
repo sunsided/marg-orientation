@@ -666,6 +666,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn display_times_and_indexes(
     gyro: &[Timed<GyroscopeReading<f32>>],
     compass: &[Timed<MagnetometerReading<f32>>],
@@ -688,7 +689,7 @@ fn display_times_and_indexes(
         &info,
         &Point2::new(0.0, 0.0),
         32.0,
-        &font,
+        font,
         &Point3::new(1.0, 1.0, 1.0),
     );
 
@@ -698,7 +699,7 @@ fn display_times_and_indexes(
         &info,
         &Point2::new(0.0, 32.0),
         32.0,
-        &font,
+        font,
         &Point3::new(1.0, 1.0, 1.0),
     );
 
@@ -708,7 +709,7 @@ fn display_times_and_indexes(
         &info,
         &Point2::new(0.0, 32.0 + 32.0),
         32.0,
-        &font,
+        font,
         &Point3::new(1.0, 1.0, 1.0),
     );
 
@@ -721,7 +722,7 @@ fn display_times_and_indexes(
         &info,
         &Point2::new(0.0, 32.0 + 2.0 * 32.0),
         32.0,
-        &font,
+        font,
         &Point3::new(1.0, 1.0, 1.0),
     );
 
@@ -731,7 +732,7 @@ fn display_times_and_indexes(
         &info,
         &Point2::new(0.0, 32.0 + 3.0 * 32.0),
         32.0,
-        &font,
+        font,
         &Point3::new(1.0, 1.0, 1.0),
     );
 }
