@@ -18,7 +18,7 @@ coordinate-frame = ["dep:coordinate-frame"]
 micromath = ["dep:micromath", "coordinate-frame/micromath"]
 
 [dependencies]
-coordinate-frame = { version = "0.4.0", optional = true, features = ["num-traits", "nalgebra"] }
+coordinate-frame = { version = "0.4.0", optional = true, features = ["num-traits"] }
 micromath = { version = "2.1.0", features = ["vector", "quaternion", "num-traits"], optional = true }
 minikalman = { version = "0.6.0", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
