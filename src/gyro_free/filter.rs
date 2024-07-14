@@ -1,3 +1,5 @@
+//! A Gyro-free Magnetic Field- and Gravity-based orientation estimator.
+
 use crate::gyro_free::types::*;
 use crate::prelude::*;
 use crate::types::{
@@ -14,7 +16,15 @@ use num_traits::Zero;
 /// A magnetic field reference vector.
 pub type MagneticReference<T> = MagnetometerReading<T>;
 
-/// A MARG (Magnetic, Angular Rate, and Gravity) orientation estimator with generic type `T`.
+/// A Gyro-free Magnetic Field- and Gravity-based orientation estimator over a generic type `T`.
+///
+/// This estimator is "gyro-free", i.e. it can work with only accelerometer and magnetometer
+/// readings; to ensure correct orientation, a magnetic field reference vector needs to be
+/// provided (in the body frame), indicating the earth's magnetic field direction at the
+/// location of the device.
+///
+/// The estimator operates in a North, East, Down coordinate frame and requires all readings
+/// in that frame to operate correctly.
 pub struct OwnedOrientationEstimator<T> {
     filter: OwnedKalmanFilter<T>,
     /// Magnetometer measurements.
@@ -89,6 +99,11 @@ impl<T> OwnedOrientationEstimator<T> {
 
     /// Performs a correction step using accelerometer and magnetometer readings.
     ///
+    /// ## How it works
+    /// This function uses the down vector as a reference and rotates it using the
+    /// estimated orientation transformation; it is then compared with the provided accelerometer
+    /// reading.
+    ///
     /// ## Arguments
     /// * `accelerometer` - The accelerometer reading.
     pub fn correct_accelerometer(&mut self, accelerometer: &AccelerometerReading<T>)
@@ -104,6 +119,13 @@ impl<T> OwnedOrientationEstimator<T> {
         let two = T::one() + T::one();
         let (q0, q1, q2, q3) = self.estimated_quaternion();
 
+        // This applies a simplified version of the Jacobian of the rotated vector with
+        // respect to the rotation quaternion. In general, all vector components influence
+        // the Jacobian; the down vector however has zeroes on both x and y axes and is known
+        // to be exactly one on the x (down) axis. As such, a lot of terms simplify to zero
+        // and remaining terms simplify.
+        //
+        // See the Jacobian on the magnetometer for a generalised version.
         self.acc_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
@@ -148,6 +170,11 @@ impl<T> OwnedOrientationEstimator<T> {
 
     /// Performs a correction step using accelerometer readings.
     ///
+    /// ## How it works
+    /// This function uses the magnetic field reference vector and rotates it using the
+    /// estimated orientation transformation; it is then compared with the provided magnetometer
+    /// reading.
+    ///
     /// ## Arguments
     /// * `magnetometer` - The magnetometer reading.
     pub fn correct_magnetometer(&mut self, magnetometer: &MagnetometerReading<T>)
@@ -164,6 +191,10 @@ impl<T> OwnedOrientationEstimator<T> {
         let two = one + one;
         let (q0, q1, q2, q3) = self.estimated_quaternion();
         let (mx, my, mz) = self.magnetic_field_ref.into();
+
+        // This applies a simplified version of the Jacobian of the rotated vector with
+        // respect to the rotation quaternion. Unlike the accelerometer update, here, all
+        // vector components affect the matrix.
         self.mag_measurement
             .observation_jacobian_matrix_mut()
             .apply(|mat| {
