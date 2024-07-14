@@ -1,11 +1,10 @@
 use std::cell::RefCell;
 use std::error::Error;
-use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use coordinate_frame::{EastNorthUp, NorthEastDown, NorthWestDown, SouthEastUp, WestUpNorth};
+use coordinate_frame::NorthEastDown;
 use csv::ReaderBuilder;
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
@@ -15,7 +14,6 @@ use kiss3d::scene::SceneNode;
 use kiss3d::text::Font;
 use kiss3d::window::Window;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 
 use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
 use marg_orientation::types::{
@@ -23,190 +21,18 @@ use marg_orientation::types::{
     MagnetometerReading,
 };
 
+use crate::simulation_utils::{
+    determine_sampling_rate, Kiss3DCoordinates, L3GD20Gyro, LSM303DLHCAccelerometer,
+    LSM303DLHCMagnetometer, Timed,
+};
+
+mod simulation_utils;
+
 // const DATASET: &str = "2024-07-10/stm32f3discovery/stationary";
 const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-rotate-around-up-ccw";
 // const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-tilt-top-east";
 // const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-tilt-nose-up";
 // const DATASET: &str = "2024-07-06/stm32f3discovery";
-
-/// Kiss3d uses a West, Up, North system by default.
-type Kiss3DCoordinates<T> = WestUpNorth<T>;
-
-/// LSM303DLHC accelerometer readings.
-#[derive(Debug, Deserialize)]
-struct LSM303DLHCAccelerometer {
-    /// The sample time, in seconds, relative to the Unix epoch.
-    #[serde(rename = "host_time")]
-    time: f64,
-    /// Accelerometer reading on the x-axis.
-    #[serde(rename = "x")]
-    acc_x: f32,
-    /// Accelerometer reading on the y-axis.
-    #[serde(rename = "y")]
-    acc_y: f32,
-    /// Accelerometer reading on the z-axis.
-    #[serde(rename = "z")]
-    acc_z: f32,
-}
-
-/// L3GD20 gyroscope readings.
-#[derive(Debug, Deserialize)]
-struct L3GD20Gyro {
-    /// The sample time, in seconds, relative to the Unix epoch.
-    #[serde(rename = "host_time")]
-    time: f64,
-    /// Gyroscope reading on the x-axis.
-    #[serde(rename = "x")]
-    gyro_x: f32,
-    /// Gyroscope reading on the y-axis.
-    #[serde(rename = "y")]
-    gyro_y: f32,
-    /// Gyroscope reading on the z-axis.
-    #[serde(rename = "z")]
-    gyro_z: f32,
-}
-
-/// LSM303DLHC magnetometer readings.
-#[derive(Debug, Deserialize)]
-struct LSM303DLHCMagnetometer {
-    /// The sample time, in seconds, relative to the Unix epoch.
-    #[serde(rename = "host_time")]
-    time: f64,
-    /// Magnetometer reading on the x-axis.
-    #[serde(rename = "x")]
-    compass_x: f32,
-    /// Magnetometer reading on the y-axis.
-    #[serde(rename = "y")]
-    compass_y: f32,
-    /// Magnetometer reading on the z-axis.
-    #[serde(rename = "z")]
-    compass_z: f32,
-}
-
-pub trait Time {
-    /// Gets the sample time.
-    fn time(&self) -> f64;
-}
-
-impl Time for L3GD20Gyro {
-    fn time(&self) -> f64 {
-        self.time
-    }
-}
-
-impl Time for LSM303DLHCAccelerometer {
-    fn time(&self) -> f64 {
-        self.time
-    }
-}
-
-impl Time for LSM303DLHCMagnetometer {
-    fn time(&self) -> f64 {
-        self.time
-    }
-}
-
-impl From<&LSM303DLHCAccelerometer> for AccelerometerReading<f32> {
-    fn from(value: &LSM303DLHCAccelerometer) -> Self {
-        // The HMC303DLHC's accelerometer on the STM32F3 Discovery board measures North, West, Down.
-        let frame = NorthWestDown::new(value.acc_x, value.acc_y, value.acc_z);
-        // Normalize by the sensor value range.
-        let frame = frame / 16384.0;
-        AccelerometerReading::north_east_down(frame)
-    }
-}
-
-impl From<LSM303DLHCAccelerometer> for AccelerometerReading<f32> {
-    fn from(value: LSM303DLHCAccelerometer) -> Self {
-        Self::from(&value)
-    }
-}
-
-impl From<&LSM303DLHCMagnetometer> for MagnetometerReading<f32> {
-    fn from(value: &LSM303DLHCMagnetometer) -> Self {
-        // The HMC303DLHC's magnetometer on the STM32F3 Discovery board measures South, East, Up.
-        let frame = SouthEastUp::new(value.compass_x, value.compass_y, value.compass_z);
-        // Normalize by the sensor value range.
-        let frame = frame / 1100.0;
-        MagnetometerReading::north_east_down(frame)
-    }
-}
-
-impl From<LSM303DLHCMagnetometer> for MagnetometerReading<f32> {
-    fn from(value: LSM303DLHCMagnetometer) -> Self {
-        Self::from(&value)
-    }
-}
-
-impl From<&L3GD20Gyro> for GyroscopeReading<f32> {
-    fn from(value: &L3GD20Gyro) -> Self {
-        // The L3GD20 gyroscope on the STM32F3 Discovery board measures East, North, Up.
-        let frame = EastNorthUp::new(value.gyro_x, value.gyro_y, value.gyro_z);
-        // Normalize by the sensor value range.
-        let frame = frame / 5.714285;
-        GyroscopeReading::north_east_down(frame)
-    }
-}
-
-impl From<L3GD20Gyro> for GyroscopeReading<f32> {
-    fn from(value: L3GD20Gyro) -> Self {
-        Self::from(&value)
-    }
-}
-
-/// A timed reading.
-pub struct Timed<R> {
-    pub time: f64,
-    pub reading: R,
-}
-
-impl<T> Timed<T> {
-    pub fn with_time_offset(mut self, value: f64) -> Self {
-        self.time -= value;
-        self
-    }
-}
-
-impl<R> Time for Timed<R> {
-    fn time(&self) -> f64 {
-        self.time
-    }
-}
-
-impl From<LSM303DLHCAccelerometer> for Timed<AccelerometerReading<f32>> {
-    fn from(value: LSM303DLHCAccelerometer) -> Self {
-        Self {
-            time: value.time,
-            reading: value.into(),
-        }
-    }
-}
-
-impl From<LSM303DLHCMagnetometer> for Timed<MagnetometerReading<f32>> {
-    fn from(value: LSM303DLHCMagnetometer) -> Self {
-        Self {
-            time: value.time,
-            reading: value.into(),
-        }
-    }
-}
-
-impl From<L3GD20Gyro> for Timed<GyroscopeReading<f32>> {
-    fn from(value: L3GD20Gyro) -> Self {
-        Self {
-            time: value.time,
-            reading: value.into(),
-        }
-    }
-}
-
-impl<R> Deref for Timed<R> {
-    type Target = R;
-
-    fn deref(&self) -> &Self::Target {
-        &self.reading
-    }
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let gyro =
@@ -225,31 +51,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let time_offset = gyro_t.min(accel_t).min(compass_t);
 
     // Convert the readings into normalized frames.
-    let gyro: Vec<Timed<GyroscopeReading<f32>>> = gyro
-        .into_iter()
-        .map(Timed::from)
-        .map(|t| t.with_time_offset(time_offset))
-        .collect();
-    let compass: Vec<Timed<MagnetometerReading<f32>>> = compass
-        .into_iter()
-        .map(Timed::from)
-        .map(|t| t.with_time_offset(time_offset))
-        .collect();
-    let accel: Vec<Timed<AccelerometerReading<f32>>> = accel
-        .into_iter()
-        .map(Timed::from)
-        .map(|t| t.with_time_offset(time_offset))
-        .collect();
+    let gyro: Vec<Timed<GyroscopeReading<f32>>> = L3GD20Gyro::vec_into_timed(gyro, time_offset);
+    let compass: Vec<Timed<MagnetometerReading<f32>>> =
+        LSM303DLHCMagnetometer::vec_into_timed(compass, time_offset);
+    let accel: Vec<Timed<AccelerometerReading<f32>>> =
+        LSM303DLHCAccelerometer::vec_into_timed(accel, time_offset);
 
     // Determine sample rates.
-    let (gyro_sample_rate, _) = determine_sampling(&gyro);
-    let (accel_sample_rate, _) = determine_sampling(&accel);
-    let (compass_sample_rate, _) = determine_sampling(&compass);
-
-    println!("Average sample rates:");
-    println!("- Accelerometer readings:  {accel_sample_rate} Hz (expected 400 Hz)");
-    println!("- Magnetometer readings:  {compass_sample_rate} Hz (expected 75 Hz)");
-    println!("- Gyroscope readings: {gyro_sample_rate} Hz (expected 400 Hz)");
+    print_sampling_rates(&gyro, &compass, &accel);
 
     // Magnetic field reference for Berlin, Germany expressed in North, East, Down.
     let reference = MagneticReference::new(18.0, 1.5, 47.0);
@@ -663,6 +472,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn print_sampling_rates(
+    gyro: &Vec<Timed<GyroscopeReading<f32>>>,
+    compass: &Vec<Timed<MagnetometerReading<f32>>>,
+    accel: &Vec<Timed<AccelerometerReading<f32>>>,
+) {
+    let (gyro_sample_rate, _) = determine_sampling_rate(&gyro);
+    let (accel_sample_rate, _) = determine_sampling_rate(&accel);
+    let (compass_sample_rate, _) = determine_sampling_rate(&compass);
+
+    println!("Average sample rates:");
+    println!("- Accelerometer readings:  {accel_sample_rate} Hz (expected 400 Hz)");
+    println!("- Magnetometer readings:  {compass_sample_rate} Hz (expected 75 Hz)");
+    println!("- Gyroscope readings: {gyro_sample_rate} Hz (expected 400 Hz)");
+}
+
 #[allow(clippy::too_many_arguments)]
 fn display_times_and_indexes(
     gyro: &[Timed<GyroscopeReading<f32>>],
@@ -799,16 +623,6 @@ fn calculate_angle_acc_mag(
     let mag_vec: Vector3<_> =
         Vector3::new(compass_meas.x, compass_meas.y, compass_meas.z).normalize();
     accel_vec.dot(&mag_vec).acos()
-}
-
-fn determine_sampling<T: Time>(data: &[T]) -> (f64, f64) {
-    let (total_diff, count) = data.windows(2).fold((0.0, 0), |(sum, cnt), window| {
-        let diff = window[1].time() - window[0].time();
-        (sum + diff, cnt + 1)
-    });
-    let sample_time = total_diff / (count as f64);
-    let sample_rate = 1.0 / sample_time;
-    (sample_rate, sample_time)
 }
 
 fn read_csv<T: DeserializeOwned>(file_path: &str) -> Result<Vec<T>, Box<dyn Error>> {
