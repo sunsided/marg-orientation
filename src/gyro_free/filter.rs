@@ -1,5 +1,3 @@
-//! A Gyro-free Magnetic Field- and Gravity-based orientation estimator.
-
 use crate::gyro_free::types::*;
 use crate::prelude::*;
 use crate::types::{

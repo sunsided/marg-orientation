@@ -1,3 +1,5 @@
+//! A Gyro-free Magnetic Field- and Gravity-based orientation estimator.
+
 mod filter;
 mod types;
 
