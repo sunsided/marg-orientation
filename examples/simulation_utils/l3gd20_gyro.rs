@@ -1,4 +1,5 @@
 use coordinate_frame::EastNorthUp;
+use num_traits::Float;
 use serde::Deserialize;
 
 use marg_orientation::types::GyroscopeReading;
@@ -43,6 +44,7 @@ impl From<&L3GD20Gyro> for GyroscopeReading<f32> {
         let frame = EastNorthUp::new(value.gyro_x, value.gyro_y, value.gyro_z);
         // Normalize by the sensor value range.
         let frame = frame / 5.714285;
+        let frame = frame.map(|x| x.to_radians());
         GyroscopeReading::north_east_down(frame)
     }
 }

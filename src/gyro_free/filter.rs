@@ -44,7 +44,6 @@ impl<T> OwnedOrientationEstimator<T> {
     /// * `magnetometer_noise` - The magnetometer noise values (sigma-squared) for each axis.
     /// * `magnetic_field_ref` - The magnetic field reference vector for the current location.
     /// * `process_noise` - A process noise value.
-    /// * `epsilon` - A small bias term to avoid divisions by zero. Set to e.g. `1e-6`.
     pub fn new(
         accelerometer_noise: AccelerometerNoise<T>,
         magnetometer_noise: MagnetometerNoise<T>,
@@ -107,7 +106,7 @@ impl<T> OwnedOrientationEstimator<T> {
     ///
     /// ## Arguments
     /// * `accelerometer` - The accelerometer reading.
-    pub fn correct_accelerometer(&mut self, accelerometer: &AccelerometerReading<T>)
+    pub fn correct_accelerometer(&mut self, accelerometer: AccelerometerReading<T>)
     where
         T: MatrixDataType + IsNaN,
     {
@@ -187,7 +186,7 @@ impl<T> OwnedOrientationEstimator<T> {
     ///
     /// ## Arguments
     /// * `magnetometer` - The magnetometer reading.
-    pub fn correct_magnetometer(&mut self, magnetometer: &MagnetometerReading<T>)
+    pub fn correct_magnetometer(&mut self, magnetometer: MagnetometerReading<T>)
     where
         T: MatrixDataType + IsNaN,
     {

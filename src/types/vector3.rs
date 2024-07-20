@@ -1,4 +1,3 @@
-use crate::types::{AccelerometerReading, MagnetometerReading};
 use core::borrow::Borrow;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Add, Mul, Neg, Sub};
@@ -106,56 +105,6 @@ where
             .field(&self.y)
             .field(&self.z)
             .finish()
-    }
-}
-
-impl<T> From<&AccelerometerReading<T>> for Vector3<T>
-where
-    T: Clone,
-{
-    #[inline]
-    fn from(value: &AccelerometerReading<T>) -> Self {
-        Self {
-            x: value.x.clone(),
-            y: value.y.clone(),
-            z: value.z.clone(),
-        }
-    }
-}
-
-impl<T> From<AccelerometerReading<T>> for Vector3<T> {
-    #[inline]
-    fn from(value: AccelerometerReading<T>) -> Self {
-        Self {
-            x: value.x,
-            y: value.y,
-            z: value.z,
-        }
-    }
-}
-
-impl<T> From<&MagnetometerReading<T>> for Vector3<T>
-where
-    T: Clone,
-{
-    #[inline]
-    fn from(value: &MagnetometerReading<T>) -> Self {
-        Self {
-            x: value.x.clone(),
-            y: value.y.clone(),
-            z: value.z.clone(),
-        }
-    }
-}
-
-impl<T> From<MagnetometerReading<T>> for Vector3<T> {
-    #[inline]
-    fn from(value: MagnetometerReading<T>) -> Self {
-        Self {
-            x: value.x,
-            y: value.y,
-            z: value.z,
-        }
     }
 }
 

@@ -121,6 +121,12 @@ where
     }
 }
 
+impl<T> From<GyroscopeReading<T>> for (T, T, T) {
+    fn from(value: GyroscopeReading<T>) -> Self {
+        (value.omega_x, value.omega_y, value.omega_z)
+    }
+}
+
 impl_standard_traits!(GyroscopeReading, T);
 
 #[cfg(test)]

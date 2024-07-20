@@ -15,10 +15,10 @@ use kiss3d::text::Font;
 use kiss3d::window::Window;
 use serde::de::DeserializeOwned;
 
-use marg_orientation::gyro_free::{MagneticReference, OwnedOrientationEstimator};
+use marg_orientation::dcm::OwnedOrientationEstimator;
 use marg_orientation::types::{
-    AccelerometerNoise, AccelerometerReading, GyroscopeReading, MagnetometerNoise,
-    MagnetometerReading,
+    AccelerometerNoise, AccelerometerReading, GyroscopeBias, GyroscopeNoise, GyroscopeReading,
+    MagnetometerNoise, MagnetometerReading,
 };
 
 use crate::simulation_utils::{
@@ -60,19 +60,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Determine sample rates.
     print_sampling_rates(&gyro, &compass, &accel);
 
-    // Magnetic field reference for Berlin, Germany expressed in North, East, Down.
-    let reference = MagneticReference::new(18.0, 1.5, 47.0);
-
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
         AccelerometerNoise::new(0.07, 0.07, 0.07),
         MagnetometerNoise::new(0.18, 0.11, 0.34),
-        reference,
-        0.001,
+        GyroscopeNoise::new(0.02, 0.02, 0.02),
+        0.1,
+        5.0,
+        5.0,
+        0.8,
+        0.8,
     );
 
-    let mut gyro_x_estimator =
-        marg_orientation::gyro_drift::GyroscopeAxisEstimator::<f32>::new(0.00003, 5.0, 0.001);
+    let mut gyro_estimator = marg_orientation::GyroRateAndDriftEstimator::<f32>::new(
+        GyroscopeBias::new(0.00003, 0.00003, 0.00003),
+        GyroscopeNoise::new(0.05, 0.05, 0.05),
+        0.001,
+    );
 
     // Prepare some basics for the simulation.
     let font = Font::new(Path::new(
@@ -208,9 +212,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         // Run a prediction.
-        if !is_paused {
-            estimator.predict();
-            gyro_x_estimator.predict(elapsed_time.as_secs_f32());
+        if !is_paused && gyro_should_update {
+            gyro_estimator.correct(gyro_meas.reading);
+
+            // let estimated_reading = gyro_estimator.rate_estimate();
+            estimator.update(elapsed_time.as_secs_f32());
+
+            // let (x, y, z) = estimator.gyro_rates().into();
+            // println!("{:+2.4}, {:+2.4}, {:+2.4}", x, y, z);
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -223,13 +232,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // Update the filter when needed.
         if acc_should_update {
-            estimator.correct_accelerometer(&accel_meas.reading);
+            estimator.correct_accelerometer(
+                accel_meas.reading,
+                gyro_meas.reading,
+                elapsed_time.as_secs_f32(),
+            );
         }
         if mag_should_update {
-            estimator.correct_magnetometer(&compass_meas.reading);
-        }
-        if gyro_should_update {
-            gyro_x_estimator.correct(gyro_meas.reading.omega_x);
+            estimator.correct_magnetometer(
+                compass_meas.reading,
+                gyro_meas.reading,
+                elapsed_time.as_secs_f32(),
+            );
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -264,6 +278,18 @@ fn main() -> Result<(), Box<dyn Error>> {
             window.draw_line(&Point3::default(), &kiss3d_point(y_axis), &dark_green);
             window.draw_line(&Point3::default(), &kiss3d_point(z_axis), &dark_blue);
         }
+
+        window.draw_line(
+            &Point3::default(),
+            &kiss3d_point(estimator.north()),
+            &dark_red,
+        );
+
+        window.draw_line(
+            &Point3::default(),
+            &kiss3d_point(estimator.down()),
+            &dark_blue,
+        );
 
         // Convert estimations.
         if display_body_frame {
@@ -381,14 +407,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         // Display gyro roll rates.
-        let estimated_omega_x = gyro_x_estimator.angular_velocity();
-        let estimated_x_bias = gyro_x_estimator.bias();
+        let estimated_omega = gyro_estimator.rate_estimate();
+        let estimated_bias = gyro_estimator.bias_estimate();
         let info = format!(
             "ωx = {:+0.02} rad/s ({:+0.02}°/s) - {:+0.02} rad/s ± {:+0.02}rad/s",
             gyro_meas.omega_x,
             gyro_meas.omega_x * 180.0 / std::f32::consts::PI,
-            estimated_omega_x,
-            estimated_x_bias
+            estimated_omega.omega_x,
+            estimated_bias.omega_x
         );
         window.draw_text(
             &info,

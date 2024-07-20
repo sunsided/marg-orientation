@@ -17,5 +17,18 @@ macro_rules! impl_standard_traits {
                 }
             }
         }
+
+        impl<$type_param> From<$type_name<$type_param>> for $crate::types::Vector3<$type_param>
+        where
+            $type_param: minikalman::prelude::MatrixDataType,
+        {
+            fn from(value: $type_name<$type_param>) -> $crate::types::Vector3<$type_param> {
+                $crate::types::Vector3 {
+                    x: value[0],
+                    y: value[1],
+                    z: value[2],
+                }
+            }
+        }
     };
 }

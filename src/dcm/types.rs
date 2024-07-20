@@ -1,11 +1,11 @@
 use minikalman::buffers::types::*;
 use minikalman::prelude::*;
-use minikalman::regular::{Control, RegularKalman, RegularObservation};
+use minikalman::regular::{RegularKalman, RegularObservation};
 
-const STATES: usize = 6; // roll rate, pitch rate, yaw rate, as well as gyro bias (drift) terms
-const CONTROLS: usize = 3; // roll rate, pitch rate, yaw rate
-const OBSERVATIONS: usize = 3; // roll, pitch, yaw
+pub const STATES: usize = 6; // x, y, z, omega_x, omega_y, omega_z
+pub const OBSERVATIONS: usize = 6; // x, y, z, omega_x, omega_y, omega_z
 
+// A Kalman filter of six states, using owned buffers.
 pub type OwnedKalmanFilter<T> = RegularKalman<
     STATES,
     T,
@@ -29,26 +29,8 @@ pub type OwnedKalmanFilter<T> = RegularKalman<
     TemporaryStateMatrixBuffer<STATES, T, MatrixDataArray<STATES, STATES, { STATES * STATES }, T>>,
 >;
 
-pub type OwnedControlInput<T> = Control<
-    STATES,
-    CONTROLS,
-    T,
-    ControlMatrixMutBuffer<STATES, 3, T, MatrixDataArray<STATES, 3, { STATES * CONTROLS }, T>>,
-    ControlVectorBuffer<CONTROLS, T, MatrixDataArray<CONTROLS, 1, CONTROLS, T>>,
-    ControlProcessNoiseCovarianceMatrixMutBuffer<
-        CONTROLS,
-        T,
-        MatrixDataArray<CONTROLS, CONTROLS, { CONTROLS * CONTROLS }, T>,
-    >,
-    TemporaryBQMatrixBuffer<
-        STATES,
-        CONTROLS,
-        T,
-        MatrixDataArray<STATES, CONTROLS, { STATES * CONTROLS }, T>,
-    >,
->;
-
-pub type OwnedObservation<T> = RegularObservation<
+/// On observation of six states, using owned buffers.
+pub type OwnedVector6Observation<T> = RegularObservation<
     STATES,
     OBSERVATIONS,
     T,
@@ -62,7 +44,7 @@ pub type OwnedObservation<T> = RegularObservation<
     MeasurementNoiseCovarianceMatrixBuffer<
         OBSERVATIONS,
         T,
-        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, 9, T>,
+        MatrixDataArray<OBSERVATIONS, OBSERVATIONS, { OBSERVATIONS * OBSERVATIONS }, T>,
     >,
     InnovationVectorBuffer<OBSERVATIONS, T, MatrixDataArray<OBSERVATIONS, 1, OBSERVATIONS, T>>,
     InnovationCovarianceMatrixBuffer<
