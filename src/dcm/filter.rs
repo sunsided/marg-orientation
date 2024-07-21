@@ -75,9 +75,9 @@ impl<T> OwnedOrientationEstimator<T> {
         T: MatrixDataType,
     {
         Vector3::new(
-            vector.x * self.x_axis.x + vector.y * self.y_axis.x + vector.z * self.z_axis.x,
-            vector.x * self.x_axis.y + vector.y * self.y_axis.y + vector.z * self.z_axis.y,
-            vector.x * self.x_axis.z + vector.y * self.y_axis.z + vector.z * self.z_axis.z,
+            vector.x * self.x_axis.x + vector.y * self.x_axis.y + vector.z * self.x_axis.z,
+            vector.x * self.y_axis.x + vector.y * self.y_axis.y + vector.z * self.y_axis.z,
+            vector.x * self.z_axis.x + vector.y * self.z_axis.y + vector.z * self.z_axis.z,
         )
     }
 

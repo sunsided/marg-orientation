@@ -22,8 +22,7 @@ use marg_orientation::types::{
 };
 
 use crate::simulation_utils::{
-    determine_sampling_rate, IterItem, Kiss3DCoordinates, L3GD20Gyro, LSM303DLHCAccelerometer,
-    LSM303DLHCMagnetometer, SimulatedEventIter, SimulatedEvents, Timed,
+    IterItem, Kiss3DCoordinates, SimulatedEventIter, SimulatedEvents, Timed,
 };
 
 mod simulation_utils;
@@ -267,18 +266,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             window.draw_line(&Point3::default(), &kiss3d_point(y_axis), &dark_green);
             window.draw_line(&Point3::default(), &kiss3d_point(z_axis), &dark_blue);
         }
-
-        window.draw_line(
-            &Point3::default(),
-            &kiss3d_point(estimator.north()),
-            &dark_red,
-        );
-
-        window.draw_line(
-            &Point3::default(),
-            &kiss3d_point(estimator.down()),
-            &dark_blue,
-        );
 
         // Convert estimations.
         if display_body_frame {
