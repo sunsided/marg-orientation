@@ -14,7 +14,6 @@ pub struct SimulatedEvents {
     gyro: Vec<Timed<GyroscopeReading<f32>>>,
     compass: Vec<Timed<MagnetometerReading<f32>>>,
     accel: Vec<Timed<AccelerometerReading<f32>>>,
-    simulation_time: Duration,
 }
 
 impl SimulatedEvents {
@@ -45,7 +44,6 @@ impl SimulatedEvents {
             gyro,
             compass,
             accel,
-            simulation_time: Duration::default(),
         })
     }
 

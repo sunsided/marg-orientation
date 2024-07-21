@@ -5,7 +5,6 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use coordinate_frame::NorthEastDown;
-use csv::ReaderBuilder;
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::nalgebra::{Matrix3, Point2, Point3, Scalar, Translation3, UnitQuaternion, Vector3};
@@ -13,7 +12,6 @@ use kiss3d::resource::Mesh;
 use kiss3d::scene::SceneNode;
 use kiss3d::text::Font;
 use kiss3d::window::Window;
-use serde::de::DeserializeOwned;
 
 use marg_orientation::dcm::OwnedOrientationEstimator;
 use marg_orientation::types::{
@@ -34,7 +32,7 @@ const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-rotate-around-up-cc
 // const DATASET: &str = "2024-07-06/stm32f3discovery";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut simulated_events = SimulatedEvents::new(DATASET)?;
+    let simulated_events = SimulatedEvents::new(DATASET)?;
 
     // Determine sample rates.
     simulated_events.print_sampling_rates();
@@ -601,18 +599,6 @@ fn calculate_angle_acc_mag(
     let mag_vec: Vector3<_> =
         Vector3::new(compass_meas.x, compass_meas.y, compass_meas.z).normalize();
     accel_vec.dot(&mag_vec).acos()
-}
-
-fn read_csv<T: DeserializeOwned>(file_path: &str) -> Result<Vec<T>, Box<dyn Error>> {
-    let mut rdr = ReaderBuilder::new().from_path(file_path)?;
-    let mut data = Vec::new();
-
-    for result in rdr.deserialize() {
-        let record: T = result?;
-        data.push(record);
-    }
-
-    Ok(data)
 }
 
 fn kiss3d_point<C, T>(vector: C) -> Point3<T>

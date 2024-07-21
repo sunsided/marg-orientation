@@ -1,5 +1,4 @@
 use coordinate_frame::EastNorthUp;
-use num_traits::Float;
 use serde::Deserialize;
 
 use marg_orientation::types::GyroscopeReading;

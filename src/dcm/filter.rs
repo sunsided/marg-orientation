@@ -1,5 +1,4 @@
 use crate::dcm::types::{OwnedKalmanFilter, OwnedVector6Observation, OBSERVATIONS, STATES};
-use crate::prelude::*;
 use crate::types::{
     AccelerometerNoise, AccelerometerReading, EulerAngles, GyroscopeNoise, GyroscopeReading,
     MagnetometerNoise, MagnetometerReading, Vector3,
@@ -7,7 +6,6 @@ use crate::types::{
 use crate::IsNaN;
 use coordinate_frame::NorthEastDown;
 use minikalman::buffers::types::*;
-use minikalman::extended::{ExtendedKalmanBuilder, ExtendedObservationBuilder};
 use minikalman::matrix::MatrixDataType;
 use minikalman::prelude::*;
 use minikalman::regular::{RegularKalmanBuilder, RegularObservationBuilder};
@@ -30,6 +28,7 @@ impl<T> OwnedOrientationEstimator<T> {
     /// * `magnetometer_noise` - The magnetometer noise values (sigma-squared) for each axis.
     /// * `gyroscope_noise` - The gyroscope noise values (sigma-squared) for each axis.
     /// * `process_noise` - A process noise value.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         accelerometer_noise: AccelerometerNoise<T>,
         magnetometer_noise: MagnetometerNoise<T>,
