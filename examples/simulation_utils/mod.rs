@@ -1,6 +1,7 @@
 mod l3gd20_gyro;
 mod lsm303dlhc_accel;
 mod lsm303ldhc_magnetometer;
+mod simulated_events;
 
 use coordinate_frame::WestUpNorth;
 use std::ops::Deref;
@@ -8,6 +9,7 @@ use std::ops::Deref;
 pub use l3gd20_gyro::*;
 pub use lsm303dlhc_accel::*;
 pub use lsm303ldhc_magnetometer::*;
+pub use simulated_events::*;
 
 /// Kiss3d uses a West, Up, North system by default.
 pub type Kiss3DCoordinates<T> = WestUpNorth<T>;
@@ -18,6 +20,7 @@ pub trait Time {
 }
 
 /// A timed reading.
+#[derive(Debug, Copy, Clone)]
 pub struct Timed<R> {
     pub time: f64,
     pub reading: R,

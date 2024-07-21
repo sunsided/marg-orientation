@@ -22,8 +22,8 @@ use marg_orientation::types::{
 };
 
 use crate::simulation_utils::{
-    determine_sampling_rate, Kiss3DCoordinates, L3GD20Gyro, LSM303DLHCAccelerometer,
-    LSM303DLHCMagnetometer, Timed,
+    determine_sampling_rate, IterItem, Kiss3DCoordinates, L3GD20Gyro, LSM303DLHCAccelerometer,
+    LSM303DLHCMagnetometer, SimulatedEvents, Timed,
 };
 
 mod simulation_utils;
@@ -35,30 +35,10 @@ const DATASET: &str = "2024-07-10/stm32f3discovery/x-forward-rotate-around-up-cc
 // const DATASET: &str = "2024-07-06/stm32f3discovery";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let gyro =
-        read_csv::<L3GD20Gyro>(format!("tests/data/{DATASET}/106-gyro-i16-x1.csv").as_str())?;
-    let compass = read_csv::<LSM303DLHCMagnetometer>(
-        format!("tests/data/{DATASET}/30-mag-i16-x3.csv").as_str(),
-    )?;
-    let accel = read_csv::<LSM303DLHCAccelerometer>(
-        format!("tests/data/{DATASET}/25-acc-i16-x3.csv").as_str(),
-    )?;
-
-    // Obtain the offset times.
-    let gyro_t = gyro[0].time;
-    let accel_t = accel[0].time;
-    let compass_t = compass[0].time;
-    let time_offset = gyro_t.min(accel_t).min(compass_t);
-
-    // Convert the readings into normalized frames.
-    let gyro: Vec<Timed<GyroscopeReading<f32>>> = L3GD20Gyro::vec_into_timed(gyro, time_offset);
-    let compass: Vec<Timed<MagnetometerReading<f32>>> =
-        LSM303DLHCMagnetometer::vec_into_timed(compass, time_offset);
-    let accel: Vec<Timed<AccelerometerReading<f32>>> =
-        LSM303DLHCAccelerometer::vec_into_timed(accel, time_offset);
+    let mut simulated_events = SimulatedEvents::new(DATASET)?;
 
     // Determine sample rates.
-    print_sampling_rates(&gyro, &compass, &accel);
+    simulated_events.print_sampling_rates();
 
     // Create the estimator.
     let mut estimator = OwnedOrientationEstimator::<f32>::new(
@@ -66,10 +46,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         MagnetometerNoise::new(0.18, 0.11, 0.34),
         GyroscopeNoise::new(0.02, 0.02, 0.02),
         0.1,
-        5.0,
-        5.0,
-        0.8,
-        0.8,
+        1.0, // 1
+        1.0, // 1
+        1.0, // 10
+        1.0, // 10
     );
 
     let mut gyro_estimator = marg_orientation::GyroRateAndDriftEstimator::<f32>::new(
@@ -104,14 +84,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     let dark_blue = blue * 0.5;
 
     // Walk through the simulation data.
-    let mut accel_index = 0;
-    let mut compass_index = 0;
-    let mut gyro_index = 0;
+    let mut event_iter = simulated_events.iter().peekable();
+    let mut events = Vec::new();
+    let mut accel_meas = Timed {
+        time: 0.0,
+        reading: AccelerometerReading::new(f32::NAN, f32::NAN, f32::NAN),
+    };
+    let mut gyro_meas = Timed {
+        time: 0.0,
+        reading: GyroscopeReading::new(f32::NAN, f32::NAN, f32::NAN),
+    };
+    let mut compass_meas = Timed {
+        time: 0.0,
+        reading: MagnetometerReading::new(f32::NAN, f32::NAN, f32::NAN),
+    };
+    let mut last_event_time = 0.0;
 
     let mut last_time = Instant::now();
     let mut simulation_time = Duration::default();
     let mut is_paused = false;
-    let mut reset_times = false;
+    let mut reset_times = true;
     let mut display_reference = true;
     let mut display_body_frame = false;
     let mut display_sensors = true;
@@ -124,10 +116,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if reset_times {
             reset_times = false;
+            accel_meas = Timed {
+                time: 0.0,
+                reading: AccelerometerReading::new(0.0, 0.0, 1.0),
+            };
+            gyro_meas = Timed {
+                time: 0.0,
+                reading: GyroscopeReading::default(),
+            };
+            compass_meas = Timed {
+                time: 0.0,
+                reading: MagnetometerReading::new(1.0, 0.0, 0.0),
+            };
             simulation_time = Duration::default();
-            accel_index = 0;
-            gyro_index = 0;
-            compass_index = 0;
+            event_iter = simulated_events.iter().peekable();
         }
 
         // Handle window events to check for key presses
@@ -158,45 +160,63 @@ fn main() -> Result<(), Box<dyn Error>> {
             window.set_background_color(0.149, 0.122, 0.118);
         }
 
-        // Enable updates when we receive new data.
-        let mut acc_should_update = false;
-        let mut mag_should_update = false;
-        let mut gyro_should_update = false;
-
         // Increment simulation index.
         if !is_paused {
-            while accel[accel_index].time < simulation_time.as_secs_f64() {
-                accel_index += 1;
-                acc_should_update = true;
-                if accel_index >= accel.len() {
-                    reset_times = true;
-                    continue 'render;
+            events.clear();
+
+            let simulation_time = simulation_time.as_secs_f64();
+            'collect: while let Some(event) = event_iter.peek() {
+                if event.time() <= simulation_time {
+                    let event = event_iter.next().expect("item exists");
+                    events.push(event);
+                } else {
+                    break 'collect;
                 }
             }
-            while gyro[gyro_index].time < simulation_time.as_secs_f64() {
-                gyro_index += 1;
-                gyro_should_update = true;
-                if accel_index >= gyro.len() {
-                    reset_times = true;
-                    continue 'render;
-                }
+
+            if event_iter.peek().is_none() && events.is_empty() {
+                reset_times = true;
+                continue 'render;
             }
-            while compass[compass_index].time < simulation_time.as_secs_f64() {
-                compass_index += 1;
-                mag_should_update = true;
-                if compass_index >= compass.len() {
-                    reset_times = true;
-                    continue 'render;
+        }
+
+        for event in events.drain(..) {
+            let mut elapsed_time = (last_event_time - event.time()) as f32;
+            if elapsed_time == 0.0 {
+                elapsed_time = 0.01;
+            }
+
+            last_event_time = event.time();
+
+            // Update the estimator.
+            estimator.update(elapsed_time);
+
+            match event {
+                IterItem::Gyro(data) => {
+                    gyro_meas = data;
+                    gyro_estimator.correct(gyro_meas.reading);
+                }
+                IterItem::Accelerometer(data) => {
+                    accel_meas = data;
+                    estimator.correct_accelerometer(
+                        accel_meas.reading,
+                        gyro_meas.reading,
+                        elapsed_time,
+                    );
+                }
+                IterItem::Magnetometer(data) => {
+                    compass_meas = data;
+                    estimator.correct_magnetometer(
+                        compass_meas.reading,
+                        gyro_meas.reading,
+                        elapsed_time,
+                    );
                 }
             }
         }
 
-        let accel_meas = &accel[accel_index];
-        let gyro_meas = &gyro[gyro_index];
-        let compass_meas = &compass[compass_index];
-
         // Calculate the angle between the magnetic field vector and the down vector.
-        let angle_mag_accel = calculate_angle_acc_mag(accel_meas, compass_meas);
+        let angle_mag_accel = calculate_angle_acc_mag(&accel_meas, &compass_meas);
 
         // Calculated heading.
         let heading_degrees = {
@@ -211,39 +231,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        // Run a prediction.
-        if !is_paused && gyro_should_update {
-            gyro_estimator.correct(gyro_meas.reading);
-
-            // let estimated_reading = gyro_estimator.rate_estimate();
-            estimator.update(elapsed_time.as_secs_f32());
-
-            // let (x, y, z) = estimator.gyro_rates().into();
-            // println!("{:+2.4}, {:+2.4}, {:+2.4}", x, y, z);
-        }
-
         let estimated_angles = estimator.estimated_angles();
         if estimated_angles.yaw_psi.is_nan()
             || estimated_angles.pitch_theta.is_nan()
             || estimated_angles.roll_phi.is_nan()
         {
             todo!("nan before correction");
-        }
-
-        // Update the filter when needed.
-        if acc_should_update {
-            estimator.correct_accelerometer(
-                accel_meas.reading,
-                gyro_meas.reading,
-                elapsed_time.as_secs_f32(),
-            );
-        }
-        if mag_should_update {
-            estimator.correct_magnetometer(
-                compass_meas.reading,
-                gyro_meas.reading,
-                elapsed_time.as_secs_f32(),
-            );
         }
 
         let estimated_angles = estimator.estimated_angles();
@@ -314,14 +307,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         display_times_and_indexes(
-            &gyro,
-            &compass,
-            &accel,
+            &gyro_meas,
+            &compass_meas,
+            &accel_meas,
             &font,
             &mut window,
-            accel_index,
-            compass_index,
-            gyro_index,
             simulation_time,
             elapsed_time,
         );
@@ -498,31 +488,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn print_sampling_rates(
-    gyro: &Vec<Timed<GyroscopeReading<f32>>>,
-    compass: &Vec<Timed<MagnetometerReading<f32>>>,
-    accel: &Vec<Timed<AccelerometerReading<f32>>>,
-) {
-    let (gyro_sample_rate, _) = determine_sampling_rate(&gyro);
-    let (accel_sample_rate, _) = determine_sampling_rate(&accel);
-    let (compass_sample_rate, _) = determine_sampling_rate(&compass);
-
-    println!("Average sample rates:");
-    println!("- Accelerometer readings:  {accel_sample_rate} Hz (expected 400 Hz)");
-    println!("- Magnetometer readings:  {compass_sample_rate} Hz (expected 75 Hz)");
-    println!("- Gyroscope readings: {gyro_sample_rate} Hz (expected 400 Hz)");
-}
-
 #[allow(clippy::too_many_arguments)]
 fn display_times_and_indexes(
-    gyro: &[Timed<GyroscopeReading<f32>>],
-    compass: &[Timed<MagnetometerReading<f32>>],
-    accel: &[Timed<AccelerometerReading<f32>>],
+    gyro: &Timed<GyroscopeReading<f32>>,
+    compass: &Timed<MagnetometerReading<f32>>,
+    accel: &Timed<AccelerometerReading<f32>>,
     font: &Rc<Font>,
     window: &mut Window,
-    accel_index: usize,
-    compass_index: usize,
-    gyro_index: usize,
     simulation_time: Duration,
     elapsed_time: Duration,
 ) {
@@ -551,7 +523,7 @@ fn display_times_and_indexes(
     );
 
     // Display simulation indexes.
-    let info = format!("ta = {:.2} s (#{})", accel[accel_index].time, accel_index);
+    let info = format!("ta = {:.2} s", accel.time);
     window.draw_text(
         &info,
         &Point2::new(0.0, 32.0 + 32.0),
@@ -561,10 +533,7 @@ fn display_times_and_indexes(
     );
 
     // Display simulation indexes.
-    let info = format!(
-        "tm = {:.2} s (#{})",
-        compass[compass_index].time, compass_index
-    );
+    let info = format!("tm = {:.2} s", compass.time);
     window.draw_text(
         &info,
         &Point2::new(0.0, 32.0 + 2.0 * 32.0),
@@ -574,7 +543,7 @@ fn display_times_and_indexes(
     );
 
     // Display simulation indexes.
-    let info = format!("tg = {:.2} s (#{})", gyro[gyro_index].time, gyro_index);
+    let info = format!("tg = {:.2} s", gyro.time);
     window.draw_text(
         &info,
         &Point2::new(0.0, 32.0 + 3.0 * 32.0),
