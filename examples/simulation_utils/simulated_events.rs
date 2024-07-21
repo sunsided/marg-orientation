@@ -71,6 +71,31 @@ pub struct SimulatedEventIter<'a> {
     accel: Peekable<Iter<'a, Timed<AccelerometerReading<f32>>>>,
 }
 
+impl<'a> SimulatedEventIter<'a> {
+    pub fn collect_until_into(
+        iter: &mut Peekable<SimulatedEventIter>,
+        simulation_time: Duration,
+        events: &mut Vec<IterItem>,
+    ) -> bool {
+        let simulation_time = simulation_time.as_secs_f64();
+
+        'collect: while let Some(event) = iter.peek() {
+            if event.time() <= simulation_time {
+                let event = iter.next().expect("item exists");
+                events.push(event);
+            } else {
+                break 'collect;
+            }
+        }
+
+        if iter.peek().is_none() && events.is_empty() {
+            false
+        } else {
+            true
+        }
+    }
+}
+
 impl<'a> Iterator for SimulatedEventIter<'a> {
     type Item = IterItem;
 

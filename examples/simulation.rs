@@ -23,7 +23,7 @@ use marg_orientation::types::{
 
 use crate::simulation_utils::{
     determine_sampling_rate, IterItem, Kiss3DCoordinates, L3GD20Gyro, LSM303DLHCAccelerometer,
-    LSM303DLHCMagnetometer, SimulatedEvents, Timed,
+    LSM303DLHCMagnetometer, SimulatedEventIter, SimulatedEvents, Timed,
 };
 
 mod simulation_utils;
@@ -129,6 +129,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 reading: MagnetometerReading::new(1.0, 0.0, 0.0),
             };
             simulation_time = Duration::default();
+            last_event_time = 0.0;
             event_iter = simulated_events.iter().peekable();
         }
 
@@ -164,24 +165,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         if !is_paused {
             events.clear();
 
-            let simulation_time = simulation_time.as_secs_f64();
-            'collect: while let Some(event) = event_iter.peek() {
-                if event.time() <= simulation_time {
-                    let event = event_iter.next().expect("item exists");
-                    events.push(event);
-                } else {
-                    break 'collect;
-                }
-            }
-
-            if event_iter.peek().is_none() && events.is_empty() {
+            if !SimulatedEventIter::collect_until_into(
+                &mut event_iter,
+                simulation_time,
+                &mut events,
+            ) {
                 reset_times = true;
                 continue 'render;
             }
         }
 
+        // Apply all updates we missed in between rendering frames.
         for event in events.drain(..) {
-            let mut elapsed_time = (last_event_time - event.time()) as f32;
+            let mut elapsed_time = (event.time() - last_event_time) as f32;
             if elapsed_time == 0.0 {
                 elapsed_time = 0.01;
             }
